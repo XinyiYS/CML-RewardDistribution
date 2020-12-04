@@ -2,6 +2,7 @@ import copy
 import numpy as np
 from .kernels import rbf, dot
 
+
 def MMD_hat_squared(X, Y, kernel=dot):
 	n, m = len(X), len(Y)
 	
@@ -14,6 +15,7 @@ def MMD_hat_squared(X, Y, kernel=dot):
 	mmd -= 2.0/(n*m)* pairwise_XY.sum()
 	return mmd
 
+
 def MMD_update(MMD, X, Y, x_new, A_t, B_t, kernel=dot):
 	n, m = len(X), len(Y)
 
@@ -22,6 +24,7 @@ def MMD_update(MMD, X, Y, x_new, A_t, B_t, kernel=dot):
 	updated_mmd = A_t + B_t + MMD
 	
 	return updated_mmd, A_t, B_t
+
 
 def calculate_quantiles(D, k=1000, kernel=dot):
 	mmds = []
@@ -34,9 +37,17 @@ def calculate_quantiles(D, k=1000, kernel=dot):
 		mmds.append(MMD_hat_squared(X, Y, kernel))
 	return sorted(mmds)
 
+
 def get_quantile(alpha, D):
 	assert 0<alpha <1, "alpha must be in range (0,1) exclusive."
 	# D = np.append(X, Y, axis = 0)
 	quantiles = calculate_quantiles(D)
 
 	return quantiles[int(alpha*len(quantiles))]
+
+
+def union(D, R):
+	if len(R) == 0:
+		return D
+	else:
+		return np.concatenate((D, R), axis=0)
