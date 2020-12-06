@@ -34,10 +34,6 @@ if torch.cuda.is_available():
 fake_images = G(fixed_noise)
 
 
-# z = torch.randn(batch_size, latent_size).cuda()
-# z = Variable(z)
-# fake_images = G(z)
-
 fake_images_np = fake_images.cpu().detach().numpy()
 fake_images_np = fake_images_np.reshape(fake_images_np.shape[0], 28, 28)
 R, C = 5, 5
