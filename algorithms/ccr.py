@@ -3,6 +3,45 @@ from tqdm.notebook import trange
 from utils.mmd import mmd, mmd_update
 from utils.utils import union
 import math
+from multiprocessing import Pool
+
+
+def process_func(params):
+    D, Y, kernel, phi, candidates = params
+    m = candidates.shape[0]
+    R = []
+    deltas = []
+    mus = []
+
+    mmd_init, A, B, C = mmd(D, Y, kernel)
+    mu = -mmd_init
+    mus.append(mu)
+    G = candidates.copy()
+
+    with trange(m) as t1:
+        for loop0 in t1:
+            t1.set_description("Additions")
+            G_temp = []
+            DuR = union(D, R)
+            for j in range(len(G)):
+                x = G[j:j + 1]
+                mmd_new, A_temp, B_temp = mmd_update(x, DuR, Y, A, B, C, kernel)
+                delta = -mmd_new - mu
+                G_temp.append((delta, x, A_temp, B_temp, j))  # Track index j so we can remove it from G_i later
+
+            G_temp.sort()
+            (delta, x, A_temp, B_temp, idx_to_remove) = G_temp[
+                math.ceil(phi * (len(G_temp) - 1))]  # Get point at percentile of reward vector
+            mu += delta
+            deltas.append(delta)
+            mus.append(mu)
+            A = A_temp
+            B = B_temp
+            R.append(np.squeeze(x.copy()))
+            G = np.delete(G, idx_to_remove, axis=0)
+            t1.set_postfix(point=x, delta=delta, mu=mu)
+
+    return R, deltas, mus
 
 
 def con_conv_rate(candidates, Y, phi, D, kernel):
@@ -15,42 +54,20 @@ def con_conv_rate(candidates, Y, phi, D, kernel):
     :param kernel: kernel to measure MMD
     """
     k = D.shape[0]
-    m = candidates.shape[1]
-    R = []
-    deltas = [[] for i in range(k)]
-    mus = [[] for i in range(k)]
 
-    with trange(k) as t0:
-        for i in t0:
-            t0.set_description("Party loop")
-            R_i = []
-            mmd_init, A, B, C = mmd(D[i], Y, kernel)
-            mu = -mmd_init
-            mus[i].append(mu)
-            G_i = candidates[i].copy()
+    # Construct params list
+    params = [(D[i], Y, kernel, phi[i], candidates[i]) for i in range(k)]
 
-            with trange(m) as t1:
-                for loop0 in t1:
-                    t1.set_description("Additions")
-                    G_temp = []
-                    DuR = union(D[i], R_i)
-                    for j in range(len(G_i)):
-                        x = G_i[j:j + 1]
-                        mmd_new, A_temp, B_temp = mmd_update(x, DuR, Y, A, B, C, kernel)
-                        delta = -mmd_new - mu
-                        G_temp.append((delta, x, A_temp, B_temp, j))  # Track index j so we can remove it from G_i later
+    # Each party's reward can be computed in parallel
+    with Pool(k) as p:
+        R = p.map(process_func, params)
 
-                    G_temp.sort()
-                    (delta, x, A_temp, B_temp, idx_to_remove) = G_temp[
-                        math.ceil(phi[i] * (len(G_temp) - 1))]  # Get point at percentile of reward vector
-                    mu += delta
-                    deltas[i].append(delta)
-                    mus[i].append(mu)
-                    A = A_temp
-                    B = B_temp
-                    R_i.append(np.squeeze(x.copy()))
-                    G_i = np.delete(G_i, idx_to_remove, axis=0)
-                    t1.set_postfix(point=x, delta=delta, mu=mu)
-            R.append(R_i)
+    rewards = []
+    deltas = []
+    mus = []
+    for i in range(len(R)):
+        rewards.append(R[i][0])
+        deltas.append(R[i][1])
+        mus.append(R[i][2])
 
-    return R, deltas, mus
+    return rewards, deltas, mus
