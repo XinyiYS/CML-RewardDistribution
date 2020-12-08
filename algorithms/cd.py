@@ -65,19 +65,17 @@ def weighted_sampling(candidates, D, mu_target, Y, kernel, greed):
     G = candidates.copy()
 
     with trange(m) as t1:
-        for loop0 in t1:
-            t1.set_description("Additions")
-            weights = np.zeros(len(G))
+        for _ in t1:
+            t1.set_description("Additions with greed {}".format(greed))
             DuR = union(D, R)
                         
             mmds_new, As_temp, Bs_temp = mmd_update_batch(G, DuR, Y, A, B, C, kernel)
             deltas_temp = -mmds_new - mu
-            weights = deltas_temp       
+            weights = deltas_temp
             probs = softmax(greed * weights)
             idx = np.random.choice(len(G), p=probs)
             
             x = G[idx:idx+1]
-            mmd_new = mmds_new[idx]
             delta = deltas_temp[idx]
             mu += delta
             deltas.append(delta)
@@ -88,6 +86,11 @@ def weighted_sampling(candidates, D, mu_target, Y, kernel, greed):
             R.append(np.squeeze(x).copy())
             G = np.delete(G, idx, axis=0)
             t1.set_postfix(point=x, delta=delta, mu=mu)
+
+            if mu > mu_target:  # Exit condition
+                break
+
+    return R, deltas, mus
             
 
 def process_func(params):
