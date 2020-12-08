@@ -55,6 +55,41 @@ def mmd_update(x, X, Y, A, B, C, k):
     return current_mmd, A_new, B_new
 
 
+def mmd_update_batch(x, X, Y, A, B, C, k):
+    """
+    Calculates unbiased MMD^2 when we add a single point to a set with an already calculated MMD. Calculates this
+    for a batch of points. Updating one point like this takes linear time instead of quadratic time by naively 
+    redoing the entire calculation. Does not return C because it stays the same throughout.
+    :param x: vector of shape (z, d)
+    :param X: array of shape (n, d)
+    :param Y: array of shape (m, d)
+    :param A: Pairwise-XX summation term, float
+    :param B: Pairwise-XY summation term (including (-2) factor), float
+    :param C: Pairwise-YY summation term, float
+    :param k: GPyTorch kernel
+    :return: MMD^2, A, B, all arrays of size (z)
+    """
+    x_tens = torch.tensor(x)
+    X_tens = torch.tensor(X)
+    Y_tens = torch.tensor(Y)
+
+    n = X.shape[0]
+    m = Y.shape[0]
+    prev_mmd = A + B + C
+
+    A_update = (-2 / (n + 1)) * A + (2 / (n * (n + 1))) * torch.sum(k(x_tens, X_tens).evaluate(), axis=1)
+    B_update = (-1 / (n + 1)) * B - (2 / (m * (n + 1))) * torch.sum(k(x_tens, Y_tens).evaluate(), axis=1)
+    
+    A_arr = A_update.detach().numpy()
+    B_arr = B_update.detach().numpy()
+
+    current_mmd = A_arr + B_arr + prev_mmd
+    A_new = A + A_arr
+    B_new = B + B_arr
+
+    return current_mmd, A_new, B_new
+
+
 def perm_sampling(P, Q, k, num_perms=200):
     """
     Shuffles two datasets together, splits this mix in 2, then calculates MMD to simulate P=Q. Does this num_perms
