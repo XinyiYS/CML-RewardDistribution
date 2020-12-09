@@ -53,7 +53,7 @@ def greedy(G_i, D_i, mu_target, Y, kernel):
 
 
 def weighted_sampling(candidates, D, mu_target, Y, kernel, greed):
-    print("Running weighted sampling algorithm with a -MMD^2 target of {}".format(mu_target))
+    print("Running weighted sampling algorithm with -MMD^2 target {}".format(mu_target))
     m = candidates.shape[0]
     R = []
     deltas = []
@@ -72,6 +72,11 @@ def weighted_sampling(candidates, D, mu_target, Y, kernel, greed):
             mmds_new, As_temp, Bs_temp = mmd_update_batch(G, DuR, Y, A, B, C, kernel)
             deltas_temp = -mmds_new - mu
             weights = deltas_temp
+            
+            weight_max = np.amax(weights)
+            weight_min = np.amin(weights)
+            weights = (weights - weight_min) / weight_max  # Scale weights to [0, 1] because greed factor may not affect sampling for very small/large weight values
+
             probs = softmax(greed * weights)
             idx = np.random.choice(len(G), p=probs)
             
