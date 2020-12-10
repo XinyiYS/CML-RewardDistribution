@@ -1,6 +1,6 @@
 import numpy as np
 from tqdm.notebook import trange
-from utils.mmd import mmd, mmd_update
+from utils.mmd import mmd, mmd_update_batch
 from utils.utils import union
 import math
 from multiprocessing import Pool
@@ -23,11 +23,12 @@ def process_func(params):
             t1.set_description("Additions")
             G_temp = []
             DuR = union(D, R)
+
+            mmds_new, As_temp, Bs_temp = mmd_update_batch(G, DuR, Y, A, B, C, kernel)
             for j in range(len(G)):
                 x = G[j:j + 1]
-                mmd_new, A_temp, B_temp = mmd_update(x, DuR, Y, A, B, C, kernel)
-                delta = -mmd_new - mu
-                G_temp.append((delta, x, A_temp, B_temp, j))  # Track index j so we can remove it from G_i later
+                delta = -mmds_new[j] - mu
+                G_temp.append((delta, x, As_temp[j], Bs_temp[j], j))  # Track index j so we can remove it from G_i later
 
             G_temp.sort()
             (delta, x, A_temp, B_temp, idx_to_remove) = G_temp[
@@ -71,3 +72,4 @@ def con_conv_rate(candidates, Y, phi, D, kernel):
         mus.append(R[i][2])
 
     return rewards, deltas, mus
+
