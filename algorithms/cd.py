@@ -1,4 +1,5 @@
 import numpy as np
+import math
 from tqdm.notebook import trange
 from utils.mmd import mmd, mmd_update, mmd_update_batch, perm_sampling
 from utils.utils import union
@@ -75,7 +76,8 @@ def weighted_sampling(candidates, D, mu_target, Y, kernel, greed):
             
             weight_max = np.amax(weights)
             weight_min = np.amin(weights)
-            weights = (weights - weight_min) / weight_max  # Scale weights to [0, 1] because greed factor may not affect sampling for very small/large weight values
+            weights = (weights - weight_min) / weight_max  # Scale weights to [0, 1] because greed factor may not affect
+            # sampling for very small/large weight values
 
             probs = softmax(greed * weights)
             idx = np.random.choice(len(G), p=probs)
@@ -101,16 +103,12 @@ def weighted_sampling(candidates, D, mu_target, Y, kernel, greed):
 def process_func(params):
     """
     Function to be passed to multiprocessing Pool.
-    :param params: (D, D[i], Y, kernel, num_perms, phi, candidates)
+    :param params: (D, D[i], Y, kernel, null_mmds, phi, candidates)
     :return: List of rewards
     """
-    D, D_i, Y, kernel, num_perms, phi, candidates, greed = params
+    D, D_i, Y, kernel, null_neg_mmds, phi, candidates, greed = params
 
-    # Work with negative mmds from here on, so larger is better
-    mmds = np.array(perm_sampling(np.concatenate(D), Y, kernel, num_perms)) * -1
-    M_min, M_max = (min(mmds), max(mmds))
-
-    mu = M_min + phi * (M_max - M_min)
+    mu = null_neg_mmds[math.ceil(phi * (len(null_neg_mmds) - 1))]  # Get negative MMD at quantile of reward vector
     
     if greed == -1:  # if pure greedy, use accelerated greedy method
         return greedy(candidates, D_i, mu, Y, kernel)
@@ -134,8 +132,11 @@ def con_div(candidates, Y, phi, D, kernel, num_perms=100, greeds=None):
     if greeds is None:
         greeds = [-1] * k
 
+    # Work with negative mmds from here on, so larger is better
+    null_neg_mmds = sorted([-val for val in perm_sampling(np.concatenate(D), Y, kernel, num_perms)])
+
     # Construct params list
-    params = [(D, D[i], Y, kernel, num_perms, phi[i], candidates[i], greeds[i]) for i in range(k)]
+    params = [(D, D[i], Y, kernel, null_neg_mmds, phi[i], candidates[i], greeds[i]) for i in range(k)]
 
     # Each party's reward can be computed in parallel
     with Pool(k) as p:

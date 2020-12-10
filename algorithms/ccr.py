@@ -32,7 +32,7 @@ def process_func(params):
 
             G_temp.sort()
             (delta, x, A_temp, B_temp, idx_to_remove) = G_temp[
-                math.ceil(phi * (len(G_temp) - 1))]  # Get point at percentile of reward vector
+                math.ceil(phi * (len(G_temp) - 1))]  # Get point at quantile of reward vector
             mu += delta
             deltas.append(delta)
             mus.append(mu)
