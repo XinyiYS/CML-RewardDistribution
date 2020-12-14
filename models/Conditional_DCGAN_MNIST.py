@@ -17,17 +17,17 @@ import torchvision.utils as vutils
 # python dcgan.py --dataset mnist --dataroot /scratch/users/vision/yu_dl/raaz.rsk/data/cifar10 --imageSize 28 --cuda --outf . --manualSeed 13 --niter 100
 
 class Generator(nn.Module):
-    def __init__(self, ngpu, nc=1, nz=100, ngf=64):
+    def __init__(self, ngpu, nc=1, nz=100, ngf=64, nclass=10):
         super(Generator, self).__init__()
         self.ngpu = ngpu
 
-        self.n_class = 10
+        self.nclass = nclass
         self.nz = nz
-        self.embeddings = nn.Linear(self.n_class, self.nz, bias=False)
+        self.embeddings = nn.Linear(self.nclass, self.nz, bias=False)
 
         self.main = nn.Sequential(
             # input is Z, going into a convolution
-            nn.ConvTranspose2d(     self.n_class + self.nz, ngf * 8, 4, 1, 0, bias=False),
+            nn.ConvTranspose2d( self.nclass + self.nz, ngf * 8, 4, 1, 0, bias=False),
             nn.BatchNorm2d(ngf * 8),
             nn.ReLU(True),
             # state size. (ngf*8) x 4 x 4
@@ -86,8 +86,8 @@ class Discriminator(nn.Module):
 
     def forward(self, input, class_label):
         """
-        input: shape of (batch_size, h, w, c)
-        class_label: shape of (batch_size, h, w, n_class)
+        input: shape of (batch_size, c, h, w)
+        class_label: shape of (batch_size, n_class, h, w)
 
         """
         input = torch.cat((input, class_label), dim=1)

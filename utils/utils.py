@@ -33,7 +33,7 @@ def split(n_samples, n_participants, train_dataset=None, mode='uniform'):
 		n_classes = len(train_dataset.classes)
 		data_indices = [(train_dataset.targets == class_id).nonzero().view(-1).tolist() for class_id in range(n_classes)]
 		class_sizes = np.linspace(1, n_classes, n_participants, dtype='int')
-		mean_size = n_samples//n_participants # for mnist mean_size = 600
+		mean_size = n_samples // n_participants # for mnist mean_size = 600
 
 		participant_indices = defaultdict(list)
 		for participant_id, class_sz in enumerate(class_sizes):	
@@ -54,35 +54,34 @@ def split(n_samples, n_participants, train_dataset=None, mode='uniform'):
 	elif mode == 'disjointclasses':
 
 		# each participant has some number partitioned classes of randomly selected examples
-		# for a 5-participant case for MNIST or CIFAR10, it works
+		# Works for a 5-participant case for MNIST or CIFAR10
 		all_classes = np.arange(len(train_dataset.classes))
 		data_indices = [(train_dataset.targets == class_id).nonzero().view(-1).tolist() for class_id in all_classes]
 		mean_size = n_samples // n_participants
 
 		# random.seed(1234)
 		class_sz = 2
-
 		multiply_by = class_sz * n_participants // len(all_classes)
-
+		cls_splits = [cls.tolist() for cls in np.array_split(all_classes, np.ceil( 1.0 * len(train_dataset.classes) / class_sz)  )] 
 		print("Using disjoint classes and partitioning the dataset to {} participants with each having {} classes.".format(n_participants, class_sz))
+
+		clses = sorted([ cls for _, cls in zip(range(n_participants), repeater(cls_splits)) ])
+
 		participant_indices = defaultdict(list)
-		for participant_id in range(0, n_participants, multiply_by):
-			classes = all_classes[participant_id:participant_id + class_sz]
-			for j in range(multiply_by):
+		for participant_id, classes in enumerate(clses):
+			print("participant id: {} is getting {} classes.".format(participant_id, classes))
 
-				print("participant id: {} is getting {} classes.".format(participant_id+j, classes) )
-				each_class_id_size = mean_size // class_sz
+			each_class_id_size = mean_size // class_sz
+			for i, class_id in enumerate(classes):
+				selected_indices = data_indices[class_id][:each_class_id_size]
+				data_indices[class_id] = data_indices[class_id][each_class_id_size:]
+				participant_indices[participant_id].extend(selected_indices)
 
-				for i, class_id in enumerate(classes):
-					selected_indices = data_indices[class_id][:each_class_id_size]
-					data_indices[class_id] = data_indices[class_id][each_class_id_size:]
-					participant_indices[participant_id+j].extend(selected_indices)
-
-					# top up to make sure all participants have the same number of samples
-					if i == len(classes) - 1 and len(participant_indices[participant_id+j]) < mean_size:
-						extra_needed = mean_size - len(participant_indices[participant_id+j])
-						participant_indices[participant_id+j].extend(data_indices[class_id][:extra_needed])
-						data_indices[class_id] = data_indices[class_id][extra_needed:]
+				# top up to make sure all participants have the same number of samples
+				if i == len(classes) - 1 and len(participant_indices[participant_id]) < mean_size:
+					extra_needed = mean_size - len(participant_indices[participant_id])
+					participant_indices[participant_id].extend(data_indices[class_id][:extra_needed])
+					data_indices[class_id] = data_indices[class_id][extra_needed:]
 		train_indices = [participant_index_list for participant_id, participant_index_list in participant_indices.items()] 
 
 	else:
@@ -121,6 +120,12 @@ def add_update_to_model(model, update, weight=1.0, device=None):
 	return model
 
 
+from itertools import repeat
+
+def repeater(arr):
+    for loader in repeat(arr):
+        for item in arr:
+            yield item
 
 
 import copy
