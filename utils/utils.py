@@ -6,87 +6,100 @@ import numpy as np
 from collections import defaultdict
 
 def split(n_samples, n_participants, train_dataset=None, mode='uniform'):
-	random.seed(1234)
-	indices = np.arange(len(train_dataset))
-	random.shuffle(indices)
-	indices = indices[:n_samples]
-	
-	if mode == 'powerlaw':
-		import math
-		from scipy.stats import powerlaw
+    '''
+    Args:
+    n_samples: total samples to be split among all participants
+    n_participants: number of participants
+    train_dataset: a torch dataset
+    mode: split mode
 
-		# alpha = 1.65911332899
-		alpha = 1
-		mean_size = len(indices)//n_participants # middle value
-		beta=np.linspace(powerlaw.ppf(0.01, alpha),powerlaw.ppf(0.99, alpha), n_participants)
+    Returns:
+    train_indices:[train_indices_1, train_indices2,...   ] a list of list of indices
+    '''
+    random.seed(1234)
+    indices = np.arange(len(train_dataset))
+    random.shuffle(indices)
+    indices = indices[:n_samples]
+    
+    if mode == 'powerlaw':
+        import math
+        from scipy.stats import powerlaw
 
-		participant_set_size=list(map(math.ceil, beta/sum(beta)*mean_size*n_participants))
-		participant_indices={}
-		accessed=0
-		for nid in range(n_participants):
-			participant_indices[nid] = indices[accessed:accessed+participant_set_size[nid]]
-			accessed=accessed+participant_set_size[nid]
+        # alpha = 1.65911332899
+        alpha = 1
+        mean_size = len(indices)//n_participants # middle value
+        beta=np.linspace(powerlaw.ppf(0.01, alpha),powerlaw.ppf(0.99, alpha), n_participants)
 
-		train_indices = [v for k,v in participant_indices.items()]
+        participant_set_size=list(map(math.ceil, beta/sum(beta)*mean_size*n_participants))
+        participant_indices={}
+        accessed=0
+        for nid in range(n_participants):
+            participant_indices[nid] = indices[accessed:accessed+participant_set_size[nid]]
+            accessed=accessed+participant_set_size[nid]
 
-	elif mode == 'classimbalance':
-		n_classes = len(train_dataset.classes)
-		data_indices = [(train_dataset.targets == class_id).nonzero().view(-1).tolist() for class_id in range(n_classes)]
-		class_sizes = np.linspace(1, n_classes, n_participants, dtype='int')
-		mean_size = n_samples // n_participants # for mnist mean_size = 600
+        train_indices = [v for k,v in participant_indices.items()]
 
-		participant_indices = defaultdict(list)
-		for participant_id, class_sz in enumerate(class_sizes):	
-			classes = range(class_sz) # can customize classes for each participant rather than just listing
-			each_class_id_size = mean_size // class_sz
-			for i, class_id in enumerate(classes):
-				selected_indices = data_indices[class_id][:each_class_id_size]
-				data_indices[class_id] = data_indices[class_id][each_class_id_size:]
-				participant_indices[participant_id].extend(selected_indices)
+    elif mode == 'classimbalance':
+        n_classes = len(train_dataset.classes)
+        data_indices = [torch.nonzero(train_dataset.targets == class_id).view(-1).tolist() for class_id in range(n_classes)]
 
-				# top up to make sure all participants have the same number of samples
-				if i == len(classes) - 1 and len(participant_indices[participant_id]) < mean_size:
-					extra_needed = mean_size - len(participant_indices[participant_id])
-					participant_indices[participant_id].extend(data_indices[class_id][:extra_needed])
-					data_indices[class_id] = data_indices[class_id][extra_needed:]
-		train_indices = [participant_index_list for participant_id, participant_index_list in participant_indices.items()] 
+        class_sizes = np.linspace(1, n_classes, n_participants, dtype='int')
+        mean_size = n_samples // n_participants # for mnist mean_size = 600
 
-	elif mode == 'disjointclasses':
+        participant_indices = defaultdict(list)
+        for participant_id, class_sz in enumerate(class_sizes): 
+            classes = range(class_sz) # can customize classes for each participant rather than just listing
+            each_class_id_size = mean_size // class_sz
+            for i, class_id in enumerate(classes):
+                selected_indices = data_indices[class_id][:each_class_id_size]
+                data_indices[class_id] = data_indices[class_id][each_class_id_size:]
+                participant_indices[participant_id].extend(selected_indices)
 
-		# each participant has some number partitioned classes of randomly selected examples
-		# Works for a 5-participant case for MNIST or CIFAR10
-		all_classes = np.arange(len(train_dataset.classes))
-		data_indices = [(train_dataset.targets == class_id).nonzero().view(-1).tolist() for class_id in all_classes]
-		mean_size = n_samples // n_participants
+                # top up to make sure all participants have the same number of samples
+                if i == len(classes) - 1 and len(participant_indices[participant_id]) < mean_size:
+                    extra_needed = mean_size - len(participant_indices[participant_id])
+                    participant_indices[participant_id].extend(data_indices[class_id][:extra_needed])
+                    data_indices[class_id] = data_indices[class_id][extra_needed:]
+        train_indices = [participant_index_list for participant_id, participant_index_list in participant_indices.items()] 
 
-		# random.seed(1234)
-		class_sz = 2
-		multiply_by = class_sz * n_participants // len(all_classes)
-		cls_splits = [cls.tolist() for cls in np.array_split(all_classes, np.ceil( 1.0 * len(train_dataset.classes) / class_sz)  )] 
-		print("Using disjoint classes and partitioning the dataset to {} participants with each having {} classes.".format(n_participants, class_sz))
+    elif mode == 'disjointclasses':
 
-		clses = sorted([ cls for _, cls in zip(range(n_participants), repeater(cls_splits)) ])
+        # each participant has some number partitioned classes of randomly selected examples
+        # Works for a 5-participant case for MNIST or CIFAR10
+        all_classes = np.arange(len(train_dataset.classes))
+        data_indices = [torch.nonzero(train_dataset.targets == class_id).view(-1).tolist() for class_id in all_classes]
 
-		participant_indices = defaultdict(list)
-		for participant_id, classes in enumerate(clses):
-			print("participant id: {} is getting {} classes.".format(participant_id, classes))
+        mean_size = n_samples // n_participants
 
-			each_class_id_size = mean_size // class_sz
-			for i, class_id in enumerate(classes):
-				selected_indices = data_indices[class_id][:each_class_id_size]
-				data_indices[class_id] = data_indices[class_id][each_class_id_size:]
-				participant_indices[participant_id].extend(selected_indices)
+        # random.seed(1234)
+        class_sz = 2
+        multiply_by = class_sz * n_participants // len(all_classes)
+        cls_splits = [cls.tolist() for cls in np.array_split(all_classes, np.ceil( 1.0 * len(train_dataset.classes) / class_sz)  )] 
+        print("Using disjoint classes and partitioning the dataset to {} participants with each having {} classes.".format(n_participants, class_sz))
 
-				# top up to make sure all participants have the same number of samples
-				if i == len(classes) - 1 and len(participant_indices[participant_id]) < mean_size:
-					extra_needed = mean_size - len(participant_indices[participant_id])
-					participant_indices[participant_id].extend(data_indices[class_id][:extra_needed])
-					data_indices[class_id] = data_indices[class_id][extra_needed:]
-		train_indices = [participant_index_list for participant_id, participant_index_list in participant_indices.items()] 
+        clses = sorted([ cls for _, cls in zip(range(n_participants), repeater(cls_splits)) ])
 
-	else:
-		train_indices = np.array_split(indices, n_participants)
-	return train_indices
+        participant_indices = defaultdict(list)
+        for participant_id, classes in enumerate(clses):
+            print("participant id: {} is getting {} classes.".format(participant_id, classes))
+
+            each_class_id_size = mean_size // class_sz
+            for i, class_id in enumerate(classes):
+                selected_indices = data_indices[class_id][:each_class_id_size]
+                data_indices[class_id] = data_indices[class_id][each_class_id_size:]
+                participant_indices[participant_id].extend(selected_indices)
+
+                # top up to make sure all participants have the same number of samples
+                if i == len(classes) - 1 and len(participant_indices[participant_id]) < mean_size:
+                    extra_needed = mean_size - len(participant_indices[participant_id])
+                    participant_indices[participant_id].extend(data_indices[class_id][:extra_needed])
+                    data_indices[class_id] = data_indices[class_id][extra_needed:]
+        train_indices = [participant_index_list for participant_id, participant_index_list in participant_indices.items()] 
+
+    else:
+        train_indices = np.array_split(indices, n_participants)
+    return train_indices
+
 
 
 def average_models(models, device=None):
@@ -126,7 +139,6 @@ def repeater(arr):
     for loader in repeat(arr):
         for item in arr:
             yield item
-
 
 import copy
 import numpy as np
@@ -182,3 +194,104 @@ def union(D, R):
 		return D
 	else:
 		return np.concatenate((D, R), axis=0)
+
+
+def evaluate_pairwise(self_loader, all_loaders, kernel, M=1000):
+    n = len(all_loaders)
+    mmds = torch.zeros((n, M))
+    t_stats = torch.zeros((n, M))
+    for i, other_loader in enumerate(all_loaders):
+        mmd_hat = 0
+        for m, (self_data, _), (other_data, _) in zip(range(M), self_loader, other_loader):
+            self_data, other_data  = self_data.cuda(), other_data.cuda()
+            mmd_2, t_stat, *_ = kernel(self_data, other_data)
+            mmds[i][m] = mmd_2
+            t_stats[i][m] = t_stat
+    return mmds.detach(), t_stats.detach()
+
+
+import torchvision.datasets as dset
+import torchvision.transforms as transforms
+import torchvision.utils as vutils
+def load_dataset(args, dataset='MNIST'):
+    if dataset=='MNIST':        
+        train_dataset = dset.MNIST(".data/mnist", train=True, download=True, 
+            transform=transforms.Compose([transforms.Resize(args['image_size']), transforms.ToTensor(), transforms.Normalize([0.1307], [0.3081])]), )
+
+        test_dataset = dset.MNIST(".data/mnist", train=False, download=True, 
+            transform=transforms.Compose([transforms.Resize(args['image_size']), transforms.ToTensor(), transforms.Normalize([0.1307], [0.3081])]), )
+
+    return train_dataset, test_dataset
+
+# --------------- Book-keeping helper functions ---------------
+
+import time, datetime
+
+import os, sys
+from os.path import join as oj
+
+def setup_experiment_dir(experiment_dir=None):
+
+    ts = time.time()
+    st = datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d-%H-%M')
+
+    if experiment_dir:
+        experiment_dir = os.path.join(experiment_dir, "Experiment_{}".format(st))
+    else:
+        experiment_dir = os.path.join("logs", "Experiment_{}".format(st))
+
+    try:
+        os.makedirs(experiment_dir, exist_ok=True)
+    except Exception as e:
+        print(str(e))
+        pass
+    print("Experimental directory is set up at: ", experiment_dir)
+    return experiment_dir
+
+def setup_dir(experiment_dir, args):
+    subdir = "N{}-E{}-B{}".format(args['n_samples_per_participant'], 
+                            args['epochs'], args['batch_size'], 
+                            )
+    logdir = os.path.join(experiment_dir, subdir)
+    from sys import platform
+    if platform in ['win32', 'cygwin']:
+        # Windows
+        logdir = os.path.join(os.getcwd(), logdir)
+    elif platform == "linux" or platform == "linux2":
+        # linux
+        pass
+    elif platform == "darwin":
+        # OS X
+        pass
+
+    try:
+        os.makedirs(logdir, exist_ok=True)
+    except Exception as e:
+        print("RAISING AN EXCEPTION:", str(e), "and logdir is:", logdir)
+        pass
+
+    if 'complete.txt' in os.listdir(logdir):
+        return logdir
+
+    with open(os.path.join(logdir,'settings_dict.txt'), 'w') as file:
+        [file.write(key + ' : ' + str(value) + '\n') for key, value in args.items()]
+    return logdir
+
+def write_model(model, logdir, args):
+    original_stdout = sys.stdout # Save a reference to the original standard output
+    from torchsummary import summary
+    with open(oj(logdir, 'model_summary.txt'), 'w') as file:
+        sys.stdout = file # Change the standard output to the file we created.
+        print(model.named_modules)
+        file.write('\n')
+        file.write('\n')
+        file.write('\n')
+        file.write('\n ----------------------- Feature Extractor Summary ----------------------- \n')
+        summary(model.feature_extractor, input_size=(args['num_channels'], args['image_size'], args['image_size']), batch_size=args['batch_size'])
+        sys.stdout = original_stdout # Reset the standard output to its original value
+    return
+
+def load_kernel(model, kernel_dir='trained_kernels', latest=True):
+    max_E = max([int(kernel[kernel.find('E')+1]) for kernel in os.listdir(kernel_dir)  ])
+    model.load_state_dict(torch.load(oj(kernel_dir, 'model_-E{}.pth'.format(str(max_E)))))
+    return model

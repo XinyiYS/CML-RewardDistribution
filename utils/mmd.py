@@ -1,6 +1,29 @@
 import numpy as np
 import torch
+from torch.linalg import norm
 from tqdm.notebook import trange
+
+
+from math import factorial as fac
+def falling_fac(n, b):
+    """
+    Return the product of n..n-b+1.
+
+    >>> falling_factorial(4, 2)  # 4*3
+    12
+    >>> falling_factorial(5, 3)  # 5*4*3
+    60
+    >>> falling_factorial(56, 1)
+    56
+    >>> falling_factorial(56, 0)
+    1
+    
+    r = 1  # Running product
+    for i in range(n, n-b, -1):
+        r *= i
+    return r
+    """
+    return fac(n) // fac(n-b)
 
 def t_statistic(mmd_2, Kxx_, Kxy, Kyy_):
     
