@@ -149,7 +149,7 @@ def objective(args, model, optimizer, trial, joint_loader, repeated_train_loader
 				joint_loader_iter.set_postfix(loss=loss.item(), mmd_losses = mmd_losses.tolist())
 
 			if epoch % args['save_interval'] == 0:
-				torch.save(model.state_dict(), oj(args['kernel_dir'], 'model_-E{}.pth'.format(epoch+1)))
+				torch.save(model.state_dict(), oj(args['logdir'], args['kernel_dir'], 'model_-E{}.pth'.format(epoch+1)))
 
 			model.eval()
 			mmd_pairwise = []
@@ -220,10 +220,10 @@ def construct_kernel(args, trial):
 
 	# --------------- Gaussian Process/Kernel module ---------------
 
-	num_dim = num_dim=args['num_features']  # fixed
+	num_dim = num_dim = args['num_features']  # fixed value
 	grid_bounds=(-10., 10.)
 
-	num_kernels = trial.suggest_int('num_base_kernels', 1, 3, 1)
+	num_kernels = trial.suggest_int('num_base_kernels', 1, 10, 1)
 	suggested_kernels = [getattr(gpytorch.kernels, trial.suggest_categorical('kernel{}_name'.format(i+1), ['RBFKernel', 'MaternKernel']))(lengthscale_prior=gpytorch.priors.SmoothedBoxPrior(
 					math.exp(-1), math.exp(1), sigma=0.1, transform=torch.exp)) for i in range(num_kernels)]
 	covar_module = ScaleKernel(AdditiveKernel(*suggested_kernels))
@@ -307,7 +307,7 @@ def main(trial):
 
 	args['train'] = True # if False, loading the model for evaluation
 	args['epochs'] = trial.suggest_int("epochs", 10, 100, 5)
-	args['batch_size'] = trial.suggest_int("batch_size", 128, 384, 32)
+	args['batch_size'] = trial.suggest_int("batch_size", 128, 512, 32)
 	args['lr'] = 1e-1
 
 	args['kernel_dir'] = 'trained_kernels'
@@ -328,7 +328,7 @@ def main(trial):
 	args['logdir'] = logdir
 
 	write_model(model, logdir, args)	
-	# sys.stdout = open(os.path.join(logdir, 'log'), "w")
+	sys.stdout = open(os.path.join(logdir, 'log'), "w")
 
 	# --------------- Preparing Datasets and Dataloaders ---------------
 	joint_loader, repeated_train_loaders, test_loaders = prepare_loaders(args)
@@ -336,7 +336,7 @@ def main(trial):
 
 	# --------------- Training ---------------
 	if args['train']:
-		os.makedirs(oj(logdir, args['kernel_dir']) , exist_ok=True)
+		os.makedirs(oj(args['logdir'], args['kernel_dir']) , exist_ok=True)
 
 		obj_value = objective(args, model, optimizer, trial, joint_loader, repeated_train_loaders, test_loaders)
 	else:
