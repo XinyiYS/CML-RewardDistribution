@@ -209,7 +209,7 @@ def prepare_loaders(args):
 	test_loaders = [repeated_joint_test_loader] + repeated_test_loaders
 	return joint_loader, repeated_train_loaders, test_loaders
 
-def construct_kernel(args, trial):
+def construct_kernel(args):
 
 	from models.CVAE import VariationalAutoencoder, load_pretrain
 
@@ -220,17 +220,13 @@ def construct_kernel(args, trial):
 
 	# --------------- Gaussian Process/Kernel module ---------------
 
-	num_dim = num_dim = args['num_features']  # fixed value
 	grid_bounds=(-10., 10.)
 
-	num_kernels = trial.suggest_int('num_base_kernels', 1, 10, 1)
-	suggested_kernels = [getattr(gpytorch.kernels, trial.suggest_categorical('kernel{}_name'.format(i+1), ['RBFKernel', 'MaternKernel']))(lengthscale_prior=gpytorch.priors.SmoothedBoxPrior(
-					math.exp(-1), math.exp(1), sigma=0.1, transform=torch.exp)) for i in range(num_kernels)]
+
+	suggested_kernels = [getattr(gpytorch.kernels, base_kernel)(lengthscale_prior=gpytorch.priors.SmoothedBoxPrior(
+					math.exp(-1), math.exp(1), sigma=0.1, transform=torch.exp)) for base_kernel in args['base_kernels'] ]
 	covar_module = ScaleKernel(AdditiveKernel(*suggested_kernels))
 	gp_layer = GaussianProcessLayer(covar_module=covar_module, num_dim=args['num_features'], grid_bounds=grid_bounds)
-
-	args['num_base_kernels'] = num_kernels
-	args['base_kernels'] = suggested_kernels
 
 	# --------------- Complete Deep Kernel ---------------
 
@@ -242,19 +238,14 @@ def construct_kernel(args, trial):
 		else:
 			model = model.cuda()
 
-	# ---------- Optuna ----------
-	optimizer_name = trial.suggest_categorical("optimizer", ["Adam", "RMSprop", "SGD"])
-	lr = trial.suggest_float("lr", 1e-5, 1e-1, log=True)
-
-	optimizer = getattr(optim, optimizer_name)([
+	# ---------- Optimizer and Scheduler ----------
+	optimizer = getattr(optim, args['optimizer'])([
 		{'params': model.feature_extractor.parameters(), 'weight_decay': 1e-4},
 		{'params': model.gp_layer.hyperparameters(), 'lr': args['lr'] * 0.1},
 		{'params': model.gp_layer.variational_parameters()},
 	], lr=args['lr'], weight_decay=0)
 	scheduler = MultiStepLR(optimizer, milestones=[0.5 * args['epochs'], 0.75 * args['epochs']], gamma=0.1)
 
-	args['lr'] = lr
-	args['optimizer'] = optimizer.__class__
 	args['lr_scheduler'] = scheduler.__class__
 	args['model'] = model.__class__
 	args['feature_extractor'] = model.feature_extractor.__class__
@@ -276,7 +267,7 @@ def evaluate(model, test_loaders, args):
 	os.makedirs(mmd_dir, exist_ok=True)
 	os.makedirs(tstat_dir, exist_ok=True)
 
-	for i in range(n_participants+1):
+	for i in range(args['n_participants']+1):
 		plot_mmd_vs(all_mmd_vs, index = i, save = oj(mmd_dir, '-'+str(i)), alpha=1e4)
 		plot_mmd_vs(all_tstats_vs, index = i, save = oj(tstat_dir, '-'+str(i)), alpha=1, _type='tstat')
 	return all_mmd_vs
@@ -284,42 +275,53 @@ def evaluate(model, test_loaders, args):
 def main(trial):
 	args = {}
 	args['noise_seed'] = 1234
-	# args['n_participants'] = 5	
+
+	# ---------- Data setting ----------
+
 	n_participants = args['n_participants'] = 5
 	args['n_samples_per_participant'] = 2000
 	args['n_samples'] = args['n_participants'] * args['n_samples_per_participant']
-
 	args['split_mode'] = "disjointclasses" #@param ["disjointclasses","uniform"," classimbalance", "powerlaw"]
 
-	args['num_features'] = 10 # latent_dims
+	# ---------- Feature extractor and latent dim setting ----------
 
+	args['num_features'] = 10 # latent_dims
 	args['num_filters'] = 64 # fixed
 	# ngf number of filters for encoder/generator
 	# ndf number of filters for decoder/discriminator
 	ngf = ndf = args['num_filters']
-
 	# number of channels, 1 for MNIST, 3 for CIFAR-10, CIFAR-100
 	args['num_channels'] = 1 
 	args['num_classes'] = 10
-
 	# fixed for MNIST
 	args['image_size'] = 28
 
-	args['train'] = True # if False, loading the model for evaluation
+	# ---------- Optuna ----------
 	args['epochs'] = trial.suggest_int("epochs", 10, 100, 5)
 	args['batch_size'] = trial.suggest_int("batch_size", 128, 512, 32)
-	args['lr'] = 1e-1
+
+	args['optimizer'] = trial.suggest_categorical("optimizer", ["Adam", "RMSprop", "SGD"])
+	args['lr'] = trial.suggest_float("lr", 1e-5, 1e-1, log=True)
+
+	args['num_base_kernels'] = trial.suggest_int("num_base_kernels", 1, 3, 1)
+	args['base_kernels'] = [trial.suggest_categorical('kernel{}_name'.format(i+1), ['RBFKernel', 'MaternKernel']) for i in range(args['num_base_kernels'])]
+
+	# ---------- Logging Directories ----------
 
 	args['kernel_dir'] = 'trained_kernels'
 	args['figs_dir'] = 'figs'
 	args['save_interval'] = 10
 
-	args['num_base_kernels'] = 3
-	args['base_kernel'] = 'RBFKernel' # 'RBFKernel', 'MaternKernel', 'PolynomialKernel'
+	args['train'] = False # if False, load the model from <experiment_dir> for evaluation
+	args['experiment_dir'] = 'logs/Experiment_2020-12-16-19-28'
+
+	if not args['train']:
+		test(args['experiment_dir'], args)
+		return
 
 	# --------------- Create and Load Model ---------------
 
-	model, optimizer = construct_kernel(args, trial)
+	model, optimizer = construct_kernel(args)
 
 	# --------------- Set up the experiment config with selected hyperparameters---------------
 
@@ -333,20 +335,17 @@ def main(trial):
 	# --------------- Preparing Datasets and Dataloaders ---------------
 	joint_loader, repeated_train_loaders, test_loaders = prepare_loaders(args)
 
-
 	# --------------- Training ---------------
-	if args['train']:
-		os.makedirs(oj(args['logdir'], args['kernel_dir']) , exist_ok=True)
+	os.makedirs(oj(args['logdir'], args['kernel_dir']) , exist_ok=True)
 
-		obj_value = objective(args, model, optimizer, trial, joint_loader, repeated_train_loaders, test_loaders)
-	else:
-		model = load_kernel(model)
-
+	obj_value = objective(args, model, optimizer, trial, joint_loader, repeated_train_loaders, test_loaders)
 
 	# --------------- Evaluating Performance ---------------
-
 	evaluate(model, test_loaders, args)
+
 	return obj_value
+
+
 
 
 # from models.feature_extractors import CNN_MNIST, MLP_MNIST
@@ -356,6 +355,12 @@ from utils.plot import plot_mmd_vs
 
 import optuna
 if __name__=='__main__':
+	test=True
+	if test:
+		main
+		exit()
+
+
 	study = optuna.create_study(direction="minimize")
 	study.optimize(main, n_trials=100)
 

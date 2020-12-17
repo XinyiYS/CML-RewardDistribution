@@ -292,6 +292,6 @@ def write_model(model, logdir, args):
     return
 
 def load_kernel(model, kernel_dir='trained_kernels', latest=True):
-    max_E = max([int(kernel[kernel.find('E')+1]) for kernel in os.listdir(kernel_dir)  ])
+    max_E = max([int(kernel[kernel.find('E')+1: kernel.find('.pth')]) for kernel in os.listdir(kernel_dir)])
     model.load_state_dict(torch.load(oj(kernel_dir, 'model_-E{}.pth'.format(str(max_E)))))
     return model
