@@ -122,6 +122,7 @@ def objective(args, model, optimizer, trial, joint_loader, repeated_train_loader
 				optimizer.zero_grad()
 				
 				mmd_losses = torch.zeros(len(data), device=data[0][0].device, requires_grad=False)
+				
 				for i in range(len(data)):
 					for j in range(len(data)):
 						mmd_2, t_stat = model(data[i][0], data[j][0])
@@ -136,6 +137,7 @@ def objective(args, model, optimizer, trial, joint_loader, repeated_train_loader
 							else:
 								mmd_losses[i] += -mmd_2
 								# pass
+						break
 
 				# max min t_stats == min max -t_stats
 				# pytorch optimization is minimization, so we take the max of -t_stat, and minimize it 
@@ -312,12 +314,8 @@ def main(trial):
 	args['figs_dir'] = 'figs'
 	args['save_interval'] = 10
 
-	args['train'] = False # if False, load the model from <experiment_dir> for evaluation
+	args['train'] = True # if False, load the model from <experiment_dir> for evaluation
 	args['experiment_dir'] = 'logs/Experiment_2020-12-16-19-28'
-
-	if not args['train']:
-		test(args['experiment_dir'], args)
-		return
 
 	# --------------- Create and Load Model ---------------
 
@@ -355,12 +353,6 @@ from utils.plot import plot_mmd_vs
 
 import optuna
 if __name__=='__main__':
-	test=True
-	if test:
-		main
-		exit()
-
-
 	study = optuna.create_study(direction="minimize")
 	study.optimize(main, n_trials=100)
 
