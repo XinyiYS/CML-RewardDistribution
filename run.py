@@ -105,16 +105,16 @@ class DKLModel(gpytorch.Module):
 	#     return mmd_2, t_stat, self.gp_layer(features1), self.gp_layer(features2)
 
 # need a kernel collectively defined by gpytorch and a DNN
-def objective(args, model, optimizer, trial, joint_loader, repeated_train_loaders, test_loaders, ):
+def objective(args, model, optimizer, trial, joint_loader, train_loaders, test_loaders, ):
 
 	with gpytorch.settings.num_likelihood_samples(8):
 		for epoch in range(args['epochs']):
 			joint_loader_iter = tqdm.notebook.tqdm(joint_loader, desc=f"(Epoch {epoch}) Minibatch")
-			loaders = [joint_loader_iter] + repeated_train_loaders
-
+			# loaders = [joint_loader_iter] + train_loaders
+			loaders = train_loaders
 			model.train()
 			for data in zip(*loaders):
-				# data is of length 6 [(data_joint, target_joint), (data1, target1)... (data5, target5)]
+				# data is of length 5 [(data1, target1)... (data5, target5)]
 				data = list(data)
 				for i in range(len(data)):
 					data[i][0], data[i][1] = data[i][0].cuda(), data[i][1].cuda()    
@@ -126,24 +126,25 @@ def objective(args, model, optimizer, trial, joint_loader, repeated_train_loader
 				for i in range(len(data)):
 					for j in range(len(data)):
 						mmd_2, t_stat = model(data[i][0], data[j][0])
+
 						if torch.isnan(t_stat):
-							if i == 0:  
-								print("t_stat is nan for joint vs {}, at {}-epoch".format(j, epoch+1))
-							else:
-								print("t_stat is nan for {} vs {}, at {}-epoch".format(i, j, epoch+1))
+							print("t_stat is nan for {} vs {}, at {}-epoch".format(i, j, epoch+1))						
+							obj = mmd_2
 						else:
-							if i != j:
-								mmd_losses[i] += mmd_2
-							else:
-								mmd_losses[i] += -mmd_2
-								# pass
-						break
+							obj = t_stat
+
+						if i != j:
+							mmd_losses[i] += obj
+						else:
+							mmd_losses[i] += -obj
+
+						break # try to only optimize for the first participant
 
 				# max min t_stats == min max -t_stats
 				# pytorch optimization is minimization, so we take the max of -t_stat, and minimize it 
 				
 				# loss = torch.sum(torch.sign(mmd_losses) * torch.square(mmd_losses))
-				loss = -torch.sum(mmd_losses)
+				loss = -torch.max(mmd_losses)
 				# vae_loss = model.get_vae_loss(data_j) + model.get_vae_loss(data[i][0])
 				# loss = torch.add(loss, vae_loss)
 				loss.backward()
@@ -204,12 +205,15 @@ def prepare_loaders(args):
 	test_indices = list(itertools.chain.from_iterable(test_indices_list))
 	joint_test_loader = DataLoader(dataset=test_dataset, batch_size=args['batch_size'], sampler=SubsetRandomSampler(test_indices))
 
-	repeated_train_loaders = [repeater(train_loader) for train_loader in train_loaders]
-	repeated_test_loaders = [repeater(test_loader) for test_loader in test_loaders]
+	# repeated_train_loaders = [repeater(train_loader) for train_loader in train_loaders]
+	# repeated_test_loaders = [repeater(test_loader) for test_loader in test_loaders]
 
-	repeated_joint_test_loader = repeater(joint_test_loader)
-	test_loaders = [repeated_joint_test_loader] + repeated_test_loaders
-	return joint_loader, repeated_train_loaders, test_loaders
+	# repeated_joint_test_loader = repeater(joint_test_loader)
+	# test_loaders = [repeated_joint_test_loader] + repeated_test_loaders
+
+	return joint_loader, train_loaders, test_loaders
+
+	# return joint_loader, repeated_train_loaders, test_loaders
 
 def construct_kernel(args):
 
@@ -300,9 +304,9 @@ def main(trial):
 
 	# ---------- Optuna ----------
 	args['epochs'] = trial.suggest_int("epochs", 10, 100, 5)
-	args['batch_size'] = trial.suggest_int("batch_size", 128, 512, 32)
+	args['batch_size'] = trial.suggest_int("batch_size", 512, 1024, 128)
 
-	args['optimizer'] = trial.suggest_categorical("optimizer", ["Adam", "RMSprop", "SGD"])
+	args['optimizer'] = trial.suggest_categorical("optimizer", ["Adam", "SGD"])
 	args['lr'] = trial.suggest_float("lr", 1e-5, 1e-1, log=True)
 
 	args['num_base_kernels'] = trial.suggest_int("num_base_kernels", 1, 3, 1)
@@ -331,12 +335,12 @@ def main(trial):
 	sys.stdout = open(os.path.join(logdir, 'log'), "w")
 
 	# --------------- Preparing Datasets and Dataloaders ---------------
-	joint_loader, repeated_train_loaders, test_loaders = prepare_loaders(args)
+	joint_loader, train_loaders, test_loaders = prepare_loaders(args)
 
 	# --------------- Training ---------------
 	os.makedirs(oj(args['logdir'], args['kernel_dir']) , exist_ok=True)
 
-	obj_value = objective(args, model, optimizer, trial, joint_loader, repeated_train_loaders, test_loaders)
+	obj_value = objective(args, model, optimizer, trial, joint_loader, train_loaders, test_loaders)
 
 	# --------------- Evaluating Performance ---------------
 	evaluate(model, test_loaders, args)
