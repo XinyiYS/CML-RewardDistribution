@@ -211,7 +211,7 @@ def mmd_update_batch(x, X, Y, A, B, C, k):
     return current_mmd, A_new, B_new
 
 
-def perm_sampling(P, Q, k, num_perms=200):
+def perm_sampling(P, Q, k, num_perms=200, num_samples=None):
     """
     Shuffles two datasets together, splits this mix in 2, then calculates MMD to simulate P=Q. Does this num_perms
     number of times.
@@ -219,10 +219,13 @@ def perm_sampling(P, Q, k, num_perms=200):
     :param Q: Second dataset, array of shape (m, d)
     :param k: GPyTorch kernel
     :param num_perms: Number of permutations done to get range of MMD values.
+    :param num_samples: Number of samples taken in each shuffle. The larger this parameter, the smaller the variance in the estimate. Defaults
+    to 0.5*(n+m)
     :return: Sorted list of MMD values.
     """
     mmds = []
-    num_samples = (P.shape[0] + Q.shape[0]) // 2
+    if num_samples is None:
+        num_samples = (P.shape[0] + Q.shape[0]) // 2
     for _ in trange(num_perms, desc="Permutation sampling"):
         XY = np.concatenate((P, Q)).copy()
         np.random.shuffle(XY)
@@ -230,3 +233,4 @@ def perm_sampling(P, Q, k, num_perms=200):
         Y = XY[num_samples:]
         mmds.append(mmd(X, Y, k)[0])
     return sorted(mmds)
+
