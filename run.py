@@ -144,7 +144,7 @@ def objective(args, model, optimizer, trial, joint_loader, train_loaders, test_l
 				# pytorch optimization is minimization, so we take the max of -t_stat, and minimize it 
 				
 				# loss = torch.sum(torch.sign(mmd_losses) * torch.square(mmd_losses))
-				loss = -torch.max(mmd_losses)
+				loss = -torch.min(mmd_losses)
 				# vae_loss = model.get_vae_loss(data_j) + model.get_vae_loss(data[i][0])
 				# loss = torch.add(loss, vae_loss)
 				loss.backward()
@@ -273,7 +273,7 @@ def evaluate(model, test_loaders, args):
 	os.makedirs(mmd_dir, exist_ok=True)
 	os.makedirs(tstat_dir, exist_ok=True)
 
-	for i in range(args['n_participants']+1):
+	for i in range(args['n_participants']):
 		plot_mmd_vs(all_mmd_vs, index = i, save = oj(mmd_dir, '-'+str(i)), alpha=1e4)
 		plot_mmd_vs(all_tstats_vs, index = i, save = oj(tstat_dir, '-'+str(i)), alpha=1, _type='tstat')
 	return all_mmd_vs
