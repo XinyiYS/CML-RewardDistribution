@@ -2,7 +2,8 @@ import math
 import time, datetime
 import os,sys
 from os.path import join as oj
-
+from collections import defaultdict
+from itertools import product
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -59,30 +60,40 @@ class GaussianProcessLayer(gpytorch.models.ApproximateGP):
 		return gpytorch.distributions.MultivariateNormal(mean, covar)
 
 class DKLModel(gpytorch.Module):
-	def __init__(self, feature_extractor, gp_layer, num_dim=10, grid_bounds=(-10., 10.)):
+	def __init__(self, feature_extractor, indi_feature_extractors, gp_layer, num_dim=10, grid_bounds=(-10., 10.)):
 		super(DKLModel, self).__init__()
 		self.feature_extractor = feature_extractor
+		self.indi_feature_extractors = indi_feature_extractors
 		self.gp_layer = gp_layer
 
-		# self.grid_bounds = grid_bounds
-		# self.num_dim = num_dim
 	
-	def forward(self, x1, x2):        
+	def forward(self, x1, x2, pair, A=None, B=None, C=None):
 		features1 = self.get_vae_features(x1)
-		features2 = self.get_vae_features(x2)   
+		features2 = self.get_vae_features(x2)
+
+		features1 = self.indi_feature_extractors[pair[0]](features1)
+		features2 = self.indi_feature_extractors[pair[1]](features2)
 		mmd_2, Kxx_, Kxy, Kyy_ = mmd(features1.reshape(len(x1), -1), features2.reshape(len(x2), -1), k=self.gp_layer.covar_module)
 		t_stat = t_statistic(mmd_2, Kxx_, Kxy, Kyy_)
+		# if A is None:
+		# else:
+			# assert A is not None and B is not None and C is not None, "Batch update missing previous pairwise estimates"
+			# mmd_update_batch(x, features1, features2, A, B, C, k)
+		# t_stat = t_statistic(mmd_2, Kxx_, Kxy, Kyy_)
+		
 		return mmd_2, t_stat
 		# return mmd_2, t_stat, self.get_vae_loss(x1) + self.get_vae_loss(x2)
 		# return mmd_2, t_stat, self.gp_layer(self.process_features(features1)), self.gp_layer(self.process_features(features2))
+	
+	def get_vae_features(self, x):
+		x_mu, x_logvar = self.feature_extractor.encoder(x)
+		return self.feature_extractor.latent_sample(x_mu, x_logvar)
 
+	'''
 	def get_vae_loss(self, x):
 		x_recon, latent_mu, latent_logvar = self.feature_extractor(x)
 		return vae_loss(x_recon, x, latent_mu, latent_logvar)
 
-	def get_vae_features(self, x):
-		x_mu, x_logvar = self.feature_extractor.encoder(x)
-		return self.feature_extractor.latent_sample(x_mu, x_logvar)
 
 	def get_features(self, x):
 		features = self.feature_extractor(x)
@@ -97,56 +108,60 @@ class DKLModel(gpytorch.Module):
 		features = features.transpose(-1, -2).unsqueeze(-1)
 		return  features
 	
-	# def forward(self, x1, x2):        
-	#     features1 = self.get_features(x1)
-	#     features2 = self.get_features(x2)   
-	#     mmd_2, Kxx_, Kxy, Kyy_ = mmd(features1.reshape(len(x1), -1), features2.reshape(len(x2), -1), k=self.gp_layer.covar_module)
-	#     t_stat = t_statistic(mmd_2, Kxx_, Kxy, Kyy_)        
-	#     return mmd_2, t_stat, self.gp_layer(features1), self.gp_layer(features2)
+	def forward(self, x1, x2):        
+		features1 = self.get_features(x1)
+		features2 = self.get_features(x2)   
+		mmd_2, Kxx_, Kxy, Kyy_ = mmd(features1.reshape(len(x1), -1), features2.reshape(len(x2), -1), k=self.gp_layer.covar_module)
+		t_stat = t_statistic(mmd_2, Kxx_, Kxy, Kyy_)        
+		return mmd_2, t_stat, self.gp_layer(features1), self.gp_layer(features2)
+	'''
+# A simple individual feature extrator on top of the shared feature extrators
+class MLP(nn.Module):
+	def __init__(self, input_dim=10, output_dim=5, device=None):
+		super(MLP, self).__init__()
+		self.fc1 = nn.Linear(input_dim, 10)
+		self.fc2 = nn.Linear(10, output_dim)
+
+	def forward(self, x):
+		x = torch.sigmoid(self.fc1(x))
+		return self.fc2(x)
+
 
 # need a kernel collectively defined by gpytorch and a DNN
 def objective(args, model, optimizer, trial, joint_loader, train_loaders, test_loaders, ):
 
+	N = args['n_participants']
+	pairs = list(product(range(N), range(N)))
 	with gpytorch.settings.num_likelihood_samples(8):
 		for epoch in range(args['epochs']):
 			joint_loader_iter = tqdm.notebook.tqdm(joint_loader, desc=f"(Epoch {epoch}) Minibatch")
 			# loaders = [joint_loader_iter] + train_loaders
 			loaders = train_loaders
 			model.train()
-			for data in zip(*loaders):
+
+			for batch_id, data in enumerate(zip(*loaders)):
 				# data is of length 5 [(data1, target1)... (data5, target5)]
 				data = list(data)
 				for i in range(len(data)):
 					data[i][0], data[i][1] = data[i][0].cuda(), data[i][1].cuda()    
 	  
 				optimizer.zero_grad()
-				
-				mmd_losses = torch.zeros(len(data), device=data[0][0].device, requires_grad=False)
-				
-				for i in range(len(data)):
-					for j in range(len(data)):
-						mmd_2, t_stat = model(data[i][0], data[j][0])
+			
+				mmd_losses = torch.zeros(N, device=data[0][0].device, requires_grad=False)
+				for (i, j) in pairs:
+					mmd_2, t_stat = model(data[i][0], data[j][0], pair=[i,j])
+					if torch.isnan(t_stat):
+						print("t_stat is nan for {} vs {}, at {}-epoch".format(i, j, epoch+1))						
+						obj = mmd_2
+					else:
+						obj = t_stat
 
-						if torch.isnan(t_stat):
-							print("t_stat is nan for {} vs {}, at {}-epoch".format(i, j, epoch+1))						
-							obj = mmd_2
-						else:
-							obj = t_stat
+					if i != j:
+						mmd_losses[i] += obj
+					else:
+						mmd_losses[i] += -obj
 
-						if i != j:
-							mmd_losses[i] += obj
-						else:
-							mmd_losses[i] += -obj
-
-						break # try to only optimize for the first participant
-
-				# max min t_stats == min max -t_stats
-				# pytorch optimization is minimization, so we take the max of -t_stat, and minimize it 
-				
-				# loss = torch.sum(torch.sign(mmd_losses) * torch.square(mmd_losses))
 				loss = -torch.min(mmd_losses)
-				# vae_loss = model.get_vae_loss(data_j) + model.get_vae_loss(data[i][0])
-				# loss = torch.add(loss, vae_loss)
 				loss.backward()
 				optimizer.step()
 				joint_loader_iter.set_postfix(loss=loss.item(), mmd_losses = mmd_losses.tolist())
@@ -154,22 +169,15 @@ def objective(args, model, optimizer, trial, joint_loader, train_loaders, test_l
 			if epoch % args['save_interval'] == 0:
 				torch.save(model.state_dict(), oj(args['logdir'], args['kernel_dir'], 'model_-E{}.pth'.format(epoch+1)))
 
-			model.eval()
-			mmd_pairwise = []
-			with torch.no_grad():
-				for i, loader in enumerate(test_loaders):
-					mmds, _ = evaluate_pairwise(loader, test_loaders, model, M=50)
-					mmd_pairwise.append(mmds)
-
+			mmd_dict, tstat_dict = evaluate(model, test_loaders, args, M=50, plot=False)
 			# --------------- Objective ---------------
 			# small intra mmd, large inter mmd
 			objective = 0 # to minimize
-			for i in range(len(mmd_pairwise)):
-				for j in range(len(mmd_pairwise)):
-					if i==j:
-						objective += mmd_pairwise[i][j].sum()
-					else:
-						objective -= mmd_pairwise[i][j].sum()
+			for (i,j) in pairs:
+				if i==j:
+					objective += sum(mmd_dict[str(i)+'-'+str(j)])
+				else:
+					objective -= sum(mmd_dict[str(i)+'-'+str(j)])
 
 			trial.report(objective, epoch)
 			# Handle pruning based on the intermediate value.
@@ -220,15 +228,19 @@ def construct_kernel(args):
 	from models.CVAE import VariationalAutoencoder, load_pretrain
 
 	# --------------- Feature extractor module ---------------
+
+
+	# --------------- Shared Feature extractor module ---------------
+
 	vae = load_pretrain()
 	feature_extractor = vae
 	# feature_extractor = MLP_MNIST(in_dim = imageSize*imageSize, out_dim=num_features, device=device)
 
+	# --------------- Individual layers after the Shared Feature extractor module ---------------
+	indi_feature_extractors = [MLP(input_dim=args['num_features'], output_dim=args['num_features']) for _ in range(args['n_participants'])]
+
 	# --------------- Gaussian Process/Kernel module ---------------
-
 	grid_bounds=(-10., 10.)
-
-
 	suggested_kernels = [getattr(gpytorch.kernels, base_kernel)(lengthscale_prior=gpytorch.priors.SmoothedBoxPrior(
 					math.exp(-1), math.exp(1), sigma=0.1, transform=torch.exp)) for base_kernel in args['base_kernels'] ]
 	covar_module = ScaleKernel(AdditiveKernel(*suggested_kernels))
@@ -236,19 +248,22 @@ def construct_kernel(args):
 
 	# --------------- Complete Deep Kernel ---------------
 
-	model = DKLModel(feature_extractor, gp_layer)
+
+	model = DKLModel(feature_extractor, indi_feature_extractors, gp_layer)
 
 	if torch.cuda.is_available():
 		if torch.cuda.device_count()>1:
 			model = nn.DataParallel(model, device_ids = list(range(torch.cuda.device_count())))
 		else:
 			model = model.cuda()
+			model.feature_extractor = model.feature_extractor.cuda()
+			model.indi_feature_extractors = [f.cuda() for f in model.indi_feature_extractors]
 
 	# ---------- Optimizer and Scheduler ----------
 	optimizer = getattr(optim, args['optimizer'])([
 		{'params': model.feature_extractor.parameters(), 'weight_decay': 1e-4},
-		{'params': model.gp_layer.hyperparameters(), 'lr': args['lr'] * 0.1},
-		{'params': model.gp_layer.variational_parameters()},
+		{'params': model.gp_layer.hyperparameters(), 'lr': args['lr'] * 0.1, 'weight_decay':1e-4},
+		{'params': model.gp_layer.variational_parameters(), 'weight_decay':1e-4},
 	], lr=args['lr'], weight_decay=0)
 	scheduler = MultiStepLR(optimizer, milestones=[0.5 * args['epochs'], 0.75 * args['epochs']], gamma=0.1)
 
@@ -257,26 +272,72 @@ def construct_kernel(args):
 	args['feature_extractor'] = model.feature_extractor.__class__
 	return model, optimizer
 
-def evaluate(model, test_loaders, args):
-	all_mmd_vs, all_tstats_vs = [], []
+def evaluate(model, test_loaders, args, M=50, plot=False):
 	model.eval()
+	mmd_dict = defaultdict(list)
+	tstat_dict = defaultdict(list)
 	with torch.no_grad():
-		for i, loader in enumerate(test_loaders):
-			mmds, t_stats = evaluate_pairwise(loader, test_loaders, model, M=100)
-			all_mmd_vs.append(mmds)
-			all_tstats_vs.append(t_stats)
-	all_mmd_vs = torch.stack(all_mmd_vs, dim=1)
-	all_tstats_vs = torch.stack(all_tstats_vs, dim=1)
+		for data in zip(*test_loaders):
+			data = list(data)
+			for i in range(len(data)):
+				data[i][0], data[i][1] = data[i][0].cuda(), data[i][1].cuda()    					
 
+			for m in range(M):
+				for (i,j) in pairs:
+					if i != j:
+						size = len(data[i][0]) + len(data[j][0])
+						temp = torch.cat([data[i][0], data[j][0]])
+					else:
+						size = len(data[i][0])
+						temp = data[i][0]
+					rand_inds =  torch.randperm(size)
+					X, Y = temp[rand_inds[:size//2]], temp[rand_inds[size//2:]]
+					mmd_hat, t_stat = model(X, Y, pair=[i, j])
+
+					mmd_dict[str(i)+'-'+str(j)].append(mmd_hat)
+					tstat_dict[str(i)+'-'+str(j)].append(t_stat)
+
+	if not plot: 
+		return mmd_dict, tstat_dict
+	
 	mmd_dir = oj(args['logdir'], args['figs_dir'], 'mmd')
 	tstat_dir = oj(args['logdir'], args['figs_dir'], 'tstat')
 	os.makedirs(mmd_dir, exist_ok=True)
 	os.makedirs(tstat_dir, exist_ok=True)
 
 	for i in range(args['n_participants']):
-		plot_mmd_vs(all_mmd_vs, index = i, save = oj(mmd_dir, '-'+str(i)), alpha=1e4)
-		plot_mmd_vs(all_tstats_vs, index = i, save = oj(tstat_dir, '-'+str(i)), alpha=1, _type='tstat')
-	return all_mmd_vs
+		for key, value in mmd_vs.items():
+			if str(i) in key:
+				value = np.asarray(value)*10
+				sns.kdeplot(value, label=key)
+
+				plt.title('{} vs others MMD values'.format(str(i+1)))
+				plt.xlabel('mmd values')
+				# Set the y axis label of the current axis.
+				plt.ylabel('density')
+				# Set a title of the current axes.
+				# show a legend on the plot
+				plt.legend()
+				# Display a figure.
+				plt.savefig(oj(mmd_dir, '-'+str(i)))
+				plt.clf()
+
+
+				value = np.asarray(tstat_dict[key])*10
+				sns.kdeplot(value, label=key)
+
+				plt.title('{} vs others tstats values'.format(str(i+1)))
+				plt.xlabel('tstat values')
+				# Set the y axis label of the current axis.
+				plt.ylabel('density')
+				# Set a title of the current axes.
+				# show a legend on the plot
+				plt.legend()
+				# Display a figure.
+				plt.savefig(oj(tstat_dir, '-'+str(i)))
+				plt.clf()
+
+	return mmd_dict, tstat_dict
 
 def main(trial):
 	args = {}
@@ -285,7 +346,7 @@ def main(trial):
 	# ---------- Data setting ----------
 
 	n_participants = args['n_participants'] = 5
-	args['n_samples_per_participant'] = 2000
+	args['n_samples_per_participant'] = 1000
 	args['n_samples'] = args['n_participants'] * args['n_samples_per_participant']
 	args['split_mode'] = "disjointclasses" #@param ["disjointclasses","uniform"," classimbalance", "powerlaw"]
 
@@ -343,7 +404,7 @@ def main(trial):
 	obj_value = objective(args, model, optimizer, trial, joint_loader, train_loaders, test_loaders)
 
 	# --------------- Evaluating Performance ---------------
-	evaluate(model, test_loaders, args)
+	evaluate(model, test_loaders, args, M=100, plot=True)
 
 	return obj_value
 
@@ -352,7 +413,7 @@ def main(trial):
 
 # from models.feature_extractors import CNN_MNIST, MLP_MNIST
 from utils.utils import repeater, split, load_dataset, evaluate_pairwise, setup_experiment_dir, setup_dir, write_model, load_kernel
-from utils.mmd import mmd, t_statistic
+from utils.mmd import mmd, mmd_update_batch, t_statistic
 from utils.plot import plot_mmd_vs
 
 import optuna
