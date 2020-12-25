@@ -273,6 +273,8 @@ def construct_kernel(args):
 	return model, optimizer
 
 def evaluate(model, test_loaders, args, M=50, plot=False):
+	N = args['n_participants']
+	pairs = list(product(range(N), range(N)))
 	model.eval()
 	mmd_dict = defaultdict(list)
 	tstat_dict = defaultdict(list)
