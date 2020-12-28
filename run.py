@@ -308,7 +308,7 @@ def evaluate(model, test_loaders, args, M=50, plot=False):
 	os.makedirs(tstat_dir, exist_ok=True)
 
 	for i in range(args['n_participants']):
-		for key, value in mmd_vs.items():
+		for key, value in mmd_dict.items():
 			if str(i) in key:
 				value = np.asarray(value)*10
 				sns.kdeplot(value, label=key)
