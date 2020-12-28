@@ -4,6 +4,7 @@ import os,sys
 from os.path import join as oj
 from collections import defaultdict
 from itertools import product
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
