@@ -87,7 +87,11 @@ class DKLModel(gpytorch.Module):
 		# return mmd_2, t_stat, self.gp_layer(self.process_features(features1)), self.gp_layer(self.process_features(features2))
 	
 	def get_vae_features(self, x):
-		x_mu, x_logvar = self.feature_extractor.encoder(x)
+		if 'CIFAR' in str(self.feature_extractor.__class__):
+			x_mu, x_logvar = self.feature_extractor.encode(x)
+		else:
+			x_mu, x_logvar = self.feature_extractor.encoder(x)
+
 		return self.feature_extractor.latent_sample(x_mu, x_logvar)
 
 	'''
@@ -190,7 +194,6 @@ def objective(args, model, optimizer, trial, joint_loader, train_loaders, test_l
 def prepare_loaders(args):
 
 	train_dataset, test_dataset = load_dataset(args=args)
-	args['n_participants']
 	train_indices_list = split(args['n_samples'], args['n_participants'], train_dataset=train_dataset, mode=args['split_mode'])
 	test_indices_list = split(len(test_dataset.data), args['n_participants'], train_dataset=test_dataset, mode=args['split_mode'])
 
@@ -227,15 +230,19 @@ def prepare_loaders(args):
 
 def construct_kernel(args):
 
-	from models.CVAE import VariationalAutoencoder, load_pretrain
 
 	# --------------- Feature extractor module ---------------
 
 
 	# --------------- Shared Feature extractor module ---------------
-
-	vae = load_pretrain()
-	feature_extractor = vae
+	if args['dataset'] == 'CIFAR10':
+		from models.CIFAR_CVAE import CIFAR_CVAE
+		feature_extractor = CIFAR_CVAE(latent_dims=args['num_features'])
+	else:
+		# MNIST
+		from models.CVAE import VariationalAutoencoder, load_pretrain
+		vae = load_pretrain()
+		feature_extractor = vae
 	# feature_extractor = MLP_MNIST(in_dim = imageSize*imageSize, out_dim=num_features, device=device)
 
 	# --------------- Individual layers after the Shared Feature extractor module ---------------
@@ -365,6 +372,7 @@ def main(trial):
 	args = {}
 	args['noise_seed'] = 1234
 
+
 	# ---------- Data setting ----------
 
 	n_participants = args['n_participants'] = 5
@@ -374,25 +382,33 @@ def main(trial):
 
 	# ---------- Feature extractor and latent dim setting ----------
 
-	args['num_features'] = 10 # latent_dims
+	args['dataset'] = 'CIFAR10'
+
+
+	args['num_features'] = 128 if args['dataset'] == 'CIFAR10' else 10 # latent_dims
 	args['num_filters'] = 64 # fixed
 	# ngf number of filters for encoder/generator
 	# ndf number of filters for decoder/discriminator
 	ngf = ndf = args['num_filters']
-	# number of channels, 1 for MNIST, 3 for CIFAR-10, CIFAR-100
-	args['num_channels'] = 1 
-	args['num_classes'] = 10
+	
+	# number of channels, 1 for MNIST, 3 for CIFAR-10, CIFAR-100	
+	args['num_channels'] = 3 if args['dataset'] == 'CIFAR10' else 1
+	args['image_size'] = 32 if args['dataset'] == 'CIFAR10' else 28
+
 	# fixed for MNIST
-	args['image_size'] = 28
+	args['num_classes'] = 10
+
+
 
 	# ---------- Optuna ----------
 	args['epochs'] = trial.suggest_int("epochs", 10, 100, 5)
-	args['batch_size'] = trial.suggest_int("batch_size", 512, 1024, 128)
+	# args['epochs'] = 0
+	args['batch_size'] = trial.suggest_int("batch_size", 32, 64, 16)
 
 	args['optimizer'] = trial.suggest_categorical("optimizer", ["Adam", "SGD"])
 	args['lr'] = trial.suggest_float("lr", 1e-5, 1e-1, log=True)
 
-	args['num_base_kernels'] = trial.suggest_int("num_base_kernels", 1, 3, 1)
+	args['num_base_kernels'] = trial.suggest_int("num_base_kernels", 1, 2, 1)
 	args['base_kernels'] = [trial.suggest_categorical('kernel{}_name'.format(i+1), ['RBFKernel', 'MaternKernel']) for i in range(args['num_base_kernels'])]
 
 	# ---------- Logging Directories ----------
