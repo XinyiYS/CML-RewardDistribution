@@ -171,20 +171,21 @@ def objective(args, model, optimizer, trial, joint_loader, train_loaders, test_l
 				torch.save(model.state_dict(), oj(args['logdir'], args['kernel_dir'], 'model_-E{}.pth'.format(epoch+1)))
 
 			mmd_dict, tstat_dict = evaluate(model, test_loaders, args, M=50, plot=False)
+			
 			# --------------- Objective ---------------
 			# small intra mmd, large inter mmd
-			objective = 0 # to minimize
+			obj = 0 # to minimize
 			for (i,j) in pairs:
 				if i==j:
-					objective += sum(mmd_dict[str(i)+'-'+str(j)])
+					obj += sum(mmd_dict[str(i)+'-'+str(j)])
 				else:
-					objective -= sum(mmd_dict[str(i)+'-'+str(j)])
+					obj -= sum(mmd_dict[str(i)+'-'+str(j)])
 
-			trial.report(objective, epoch)
+			trial.report(obj, epoch)
 			# Handle pruning based on the intermediate value.
 			if trial.should_prune():
 				raise optuna.exceptions.TrialPruned()
-	return objective
+	return obj
 
 def prepare_loaders(args):
 
@@ -273,6 +274,10 @@ def construct_kernel(args):
 	args['feature_extractor'] = model.feature_extractor.__class__
 	return model, optimizer
 
+import matplotlib.pyplot as plt
+import seaborn as sns
+import json
+
 def evaluate(model, test_loaders, args, M=50, plot=False):
 	N = args['n_participants']
 	pairs = list(product(range(N), range(N)))
@@ -297,48 +302,62 @@ def evaluate(model, test_loaders, args, M=50, plot=False):
 					X, Y = temp[rand_inds[:size//2]], temp[rand_inds[size//2:]]
 					mmd_hat, t_stat = model(X, Y, pair=[i, j])
 
-					mmd_dict[str(i)+'-'+str(j)].append(mmd_hat)
-					tstat_dict[str(i)+'-'+str(j)].append(t_stat)
+					mmd_dict[str(i)+'-'+str(j)].append(mmd_hat.tolist())
+					tstat_dict[str(i)+'-'+str(j)].append(t_stat.tolist())
 
 	if not plot: 
 		return mmd_dict, tstat_dict
+
+	with open(oj(args['logdir'], 'mmd_dict'), 'w') as file:
+		file.write(json.dumps(mmd_dict))
 	
+	with open(oj(args['logdir'], 'tstat_dict'), 'w') as file:
+		file.write(json.dumps(tstat_dict))
+
 	mmd_dir = oj(args['logdir'], args['figs_dir'], 'mmd')
 	tstat_dir = oj(args['logdir'], args['figs_dir'], 'tstat')
 	os.makedirs(mmd_dir, exist_ok=True)
 	os.makedirs(tstat_dir, exist_ok=True)
 
+
 	for i in range(args['n_participants']):
-		for key, value in mmd_dict.items():
-			if str(i) in key:
-				value = np.asarray(value)*10
-				sns.kdeplot(value, label=key)
+		for j in range(args['n_participants']):
+			pair = str(i)+'-'+str(j)
 
-				plt.title('{} vs others MMD values'.format(str(i+1)))
-				plt.xlabel('mmd values')
-				# Set the y axis label of the current axis.
-				plt.ylabel('density')
-				# Set a title of the current axes.
-				# show a legend on the plot
-				plt.legend()
-				# Display a figure.
-				plt.savefig(oj(mmd_dir, '-'+str(i)))
-				plt.clf()
+			# plot and save MMD hats	
+			mmd_values = np.asarray(mmd_dict[pair])*10  
+			sns.kdeplot(mmd_values, label=pair)
+
+		plt.title('{} vs others MMD values'.format(str(i)))
+		plt.xlabel('mmd values')
+		# Set the y axis label of the current axis.
+		plt.ylabel('density')
+		# Set a title of the current axes.
+		# show a legend on the plot
+		plt.legend()
+		# Display a figure.
+		plt.savefig(oj(mmd_dir, '-'+str(i)))
+		plt.clf()
 
 
-				value = np.asarray(tstat_dict[key])*10
-				sns.kdeplot(value, label=key)
+	# plot and save Tstats	
+	for i in range(args['n_participants']):
+		for j in range(args['n_participants']):
+			pair = str(i)+'-'+str(j)
 
-				plt.title('{} vs others tstats values'.format(str(i+1)))
-				plt.xlabel('tstat values')
-				# Set the y axis label of the current axis.
-				plt.ylabel('density')
-				# Set a title of the current axes.
-				# show a legend on the plot
-				plt.legend()
-				# Display a figure.
-				plt.savefig(oj(tstat_dir, '-'+str(i)))
-				plt.clf()
+			tstat_values = np.asarray(tstat_dict[pair])*10
+			sns.kdeplot(tstat_values, label=pair)
+
+		plt.title('{} vs others tstats values'.format(str(i)))
+		plt.xlabel('tstat values')
+		# Set the y axis label of the current axis.
+		plt.ylabel('density')
+		# Set a title of the current axes.
+		# show a legend on the plot
+		plt.legend()
+		# Display a figure.
+		plt.savefig(oj(tstat_dir, '-'+str(i)))
+		plt.clf()
 
 	return mmd_dict, tstat_dict
 
@@ -410,8 +429,6 @@ def main(trial):
 	evaluate(model, test_loaders, args, M=100, plot=True)
 
 	return obj_value
-
-
 
 
 # from models.feature_extractors import CNN_MNIST, MLP_MNIST
