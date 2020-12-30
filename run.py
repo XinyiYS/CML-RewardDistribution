@@ -301,7 +301,7 @@ def train_main(trial):
 	args['experiment_dir'] = setup_experiment_dir()
 	logdir = setup_dir(args['experiment_dir'] , args)
 	args['logdir'] = logdir
-	exit()
+
 	write_model(model, logdir, args)	
 	sys.stdout = open(os.path.join(logdir, 'log'), "w")
 
