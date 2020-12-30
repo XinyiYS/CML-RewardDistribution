@@ -120,6 +120,7 @@ class DKLModel(gpytorch.Module):
 		t_stat = t_statistic(mmd_2, Kxx_, Kxy, Kyy_)        
 		return mmd_2, t_stat, self.gp_layer(features1), self.gp_layer(features2)
 	'''
+
 # A simple individual feature extrator on top of the shared feature extrators
 class MLP(nn.Module):
 	def __init__(self, input_dim=10, output_dim=5, device=None):
@@ -130,7 +131,6 @@ class MLP(nn.Module):
 	def forward(self, x):
 		x = torch.sigmoid(self.fc1(x))
 		return self.fc2(x)
-
 
 # need a kernel collectively defined by gpytorch and a DNN
 def objective(args, model, optimizer, trial, joint_loader, train_loaders, test_loaders, ):
@@ -191,41 +191,7 @@ def objective(args, model, optimizer, trial, joint_loader, train_loaders, test_l
 				raise optuna.exceptions.TrialPruned()
 	return obj
 
-def prepare_loaders(args, repeat=False):
 
-	train_dataset, test_dataset = load_dataset(args=args)
-	train_indices_list = split(args['n_samples'], args['n_participants'], train_dataset=train_dataset, mode=args['split_mode'])
-	test_indices_list = split(len(test_dataset.data), args['n_participants'], train_dataset=test_dataset, mode=args['split_mode'])
-
-	shuffle = True
-	if shuffle:
-		from random import shuffle
-		for i in range(args['n_participants']):
-			shuffle(train_indices_list[i])
-			shuffle(test_indices_list[i])
-
-	from torch.utils.data.sampler import SubsetRandomSampler
-	from torch.utils.data import DataLoader
-
-	train_loaders = [DataLoader(dataset=train_dataset, batch_size=args['batch_size'], sampler=SubsetRandomSampler(indices)) for indices in train_indices_list]
-	test_loaders = [DataLoader(dataset=train_dataset, batch_size=args['batch_size'], sampler=SubsetRandomSampler(indices)) for indices in test_indices_list]
-
-	import itertools
-	train_indices = list(itertools.chain.from_iterable(train_indices_list))
-	joint_loader = DataLoader(dataset=train_dataset, batch_size=args['batch_size'], sampler=SubsetRandomSampler(train_indices))
-	# test_loader = DataLoader(dataset=test_dataset, batch_size=10000, shuffle=True)
-
-	test_indices = list(itertools.chain.from_iterable(test_indices_list))
-	joint_test_loader = DataLoader(dataset=test_dataset, batch_size=args['batch_size'], sampler=SubsetRandomSampler(test_indices))
-
-	if not repeat:
-		return joint_loader, train_loaders, joint_test_loader, test_loaders
-	else:
-		repeated_train_loaders = [repeater(train_loader) for train_loader in train_loaders]
-		repeated_test_loaders = [repeater(test_loader) for test_loader in test_loaders]
-		# repeated_joint_test_loader = repeater(joint_test_loader)
-		# test_loaders = [repeated_joint_test_loader] + repeated_test_loaders
-		return joint_loader, repeated_train_loaders, joint_test_loader, repeated_test_loaders
 
 def construct_kernel(args):
 
@@ -237,13 +203,12 @@ def construct_kernel(args):
 	if args['dataset'] == 'CIFAR10':
 		from models.CIFAR_CVAE import CIFAR_CVAE, load_pretrain
 		CVAE = CIFAR_CVAE(latent_dims=args['num_features'])
-		feature_extractor = load_pretrain(vae=CVAE, path='CIFAR10_CVAE/model_-E800.pth')
+		feature_extractor = load_pretrain(vae=CVAE, path='CIFAR10_CVAE/model_512d.pth') # latent dimension is 512
 	else:
 		# MNIST
 		from models.CVAE import VariationalAutoencoder, load_pretrain
 		vae = load_pretrain()
 		feature_extractor = vae
-	# feature_extractor = MLP_MNIST(in_dim = imageSize*imageSize, out_dim=num_features, device=device)
 
 	# --------------- Individual layers after the Shared Feature extractor module ---------------
 	indi_feature_extractors = [MLP(input_dim=args['num_features'], output_dim=args['num_features']) for _ in range(args['n_participants'] + int(args['include_joint']))]
@@ -255,9 +220,9 @@ def construct_kernel(args):
 	covar_module = ScaleKernel(AdditiveKernel(*suggested_kernels))
 	gp_layer = GaussianProcessLayer(covar_module=covar_module, num_dim=args['num_features'], grid_bounds=grid_bounds)
 
+
+
 	# --------------- Complete Deep Kernel ---------------
-
-
 	model = DKLModel(feature_extractor, indi_feature_extractors, gp_layer)
 
 	if torch.cuda.is_available():
@@ -281,94 +246,8 @@ def construct_kernel(args):
 	args['feature_extractor'] = model.feature_extractor.__class__
 	return model, optimizer
 
-import matplotlib.pyplot as plt
-import seaborn as sns
-import json
 
-def evaluate(model, test_loaders, args, M=50, plot=False):
-	N = args['n_participants'] + int(args['include_joint'])
-	assert N == len(test_loaders), "The number of loaders is not equal equal to the total number of (paricipants + joint)."
-	pairs = list(product(range(N), range(N)))
-	model.eval()
-	mmd_dict = defaultdict(list)
-	tstat_dict = defaultdict(list)
-	with torch.no_grad():
-		for data in zip(*test_loaders):
-			data = list(data)
-			for i in range(len(data)):
-				data[i][0], data[i][1] = data[i][0].cuda(), data[i][1].cuda()    					
-
-			for m in range(M):
-				for (i,j) in pairs:
-					if i != j:
-						size = len(data[i][0]) + len(data[j][0])
-						temp = torch.cat([data[i][0], data[j][0]])
-					else:
-						size = len(data[i][0])
-						temp = data[i][0]
-					rand_inds =  torch.randperm(size)
-					X, Y = temp[rand_inds[:size//2]], temp[rand_inds[size//2:]]
-					mmd_hat, t_stat = model(X, Y, pair=[i, j])
-
-					mmd_dict[str(i)+'-'+str(j)].append(mmd_hat.tolist())
-					tstat_dict[str(i)+'-'+str(j)].append(t_stat.tolist())
-
-	if not plot: 
-		return mmd_dict, tstat_dict
-
-	with open(oj(args['logdir'], 'mmd_dict'), 'w') as file:
-		file.write(json.dumps(mmd_dict))
-	
-	with open(oj(args['logdir'], 'tstat_dict'), 'w') as file:
-		file.write(json.dumps(tstat_dict))
-
-	mmd_dir = oj(args['logdir'], args['figs_dir'], 'mmd')
-	tstat_dir = oj(args['logdir'], args['figs_dir'], 'tstat')
-	os.makedirs(mmd_dir, exist_ok=True)
-	os.makedirs(tstat_dir, exist_ok=True)
-
-
-	# plot and save MMD hats	
-	for i in range(N):
-		for j in range(N):
-			pair = str(i)+'-'+str(j)
-			mmd_values = np.asarray(mmd_dict[pair])*1e4 
-			sns.kdeplot(mmd_values, label=pair)
-
-		plt.title('{} vs others MMD values'.format(str(i)))
-		plt.xlabel('mmd values')
-		# Set the y axis label of the current axis.
-		plt.ylabel('density')
-		# Set a title of the current axes.
-		# show a legend on the plot
-		plt.legend()
-		# Display a figure.
-		plt.savefig(oj(mmd_dir, '-'+str(i)))
-		plt.clf()
-
-
-	# plot and save Tstats	
-	for i in range(N):
-		for j in range(N):
-			pair = str(i)+'-'+str(j)
-
-			tstat_values = np.asarray(tstat_dict[pair])*1e3
-			sns.kdeplot(tstat_values, label=pair)
-
-		plt.title('{} vs others tstats values'.format(str(i)))
-		plt.xlabel('tstat values')
-		# Set the y axis label of the current axis.
-		plt.ylabel('density')
-		# Set a title of the current axes.
-		# show a legend on the plot
-		plt.legend()
-		# Display a figure.
-		plt.savefig(oj(tstat_dir, '-'+str(i)))
-		plt.clf()
-
-	return mmd_dict, tstat_dict
-
-def main(trial):
+def train_main(trial):
 	args = {}
 	args['noise_seed'] = 1234
 
@@ -447,15 +326,9 @@ def main(trial):
 	return obj_value
 
 
-# from models.feature_extractors import CNN_MNIST, MLP_MNIST
-from utils.utils import repeater, split, load_dataset, evaluate_pairwise, setup_experiment_dir, setup_dir, write_model, load_kernel
-from utils.mmd import mmd, mmd_update_batch, t_statistic
-from utils.plot import plot_mmd_vs
-
-import optuna
-if __name__=='__main__':
+def run():
 	study = optuna.create_study(direction="minimize")
-	study.optimize(main, n_trials=100)
+	study.optimize(train_main, n_trials=100)
 
 	pruned_trials = [t for t in study.trials if t.state == optuna.trial.TrialState.PRUNED]
 	complete_trials = [t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE]
@@ -473,4 +346,18 @@ if __name__=='__main__':
 	print("  Params: ")
 	for key, value in trial.params.items():
 		print("    {}: {}".format(key, value))
+
+
+# from models.feature_extractors import CNN_MNIST, MLP_MNIST
+from utils.utils import evaluate, prepare_loaders, setup_experiment_dir, setup_dir, write_model, tabulate_dict
+from utils.mmd import mmd, t_statistic
+
+
+import optuna
+if __name__=='__main__':
+
+
+	train = False
+	if train:
+		run()
 

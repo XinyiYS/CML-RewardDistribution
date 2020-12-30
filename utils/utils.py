@@ -6,6 +6,11 @@ import numpy as np
 import torch
 from torch import nn
 
+import matplotlib.pyplot as plt
+import seaborn as sns
+import json
+
+
 def split(n_samples, n_participants, train_dataset=None, mode='uniform'):
 	'''
 	Args:
@@ -103,43 +108,171 @@ def split(n_samples, n_participants, train_dataset=None, mode='uniform'):
 
 
 
-def average_models(models, device=None):
-	final_model = copy.deepcopy(models[0])
-	if device:
-		models = [model.to(device) for model in models]
-		final_model = final_model.to(device)
+def prepare_loaders(args, repeat=False):
 
-	full_param_lists = [ list(model.parameters()) for model in models]
-	averaged_parameters =[ torch.stack( [parameters[i] for parameters in full_param_lists] ).mean(dim=0)	for i in range(len(full_param_lists[0])) ]
+	train_dataset, test_dataset = load_dataset(args=args)
+	train_indices_list = split(args['n_samples'], args['n_participants'], train_dataset=train_dataset, mode=args['split_mode'])
+	test_indices_list = split(len(test_dataset.data), args['n_participants'], train_dataset=test_dataset, mode=args['split_mode'])
 
-	for param, avg_param in zip(final_model.parameters(), averaged_parameters):
-		param.data = avg_param.data
-	return final_model
+	shuffle = True
+	if shuffle:
+		from random import shuffle
+		for i in range(args['n_participants']):
+			shuffle(train_indices_list[i])
+			shuffle(test_indices_list[i])
 
-def compute_grad_update(old_model, new_model, device=None):
-	# maybe later to implement on selected layers/parameters
-	if device:
-		old_model, new_model = old_model.to(device), new_model.to(device)
-	return [(new_param.data - old_param.data) for old_param, new_param in zip(old_model.parameters(), new_model.parameters())]
+	from torch.utils.data.sampler import SubsetRandomSampler
+	from torch.utils.data import DataLoader
+
+	train_loaders = [DataLoader(dataset=train_dataset, batch_size=args['batch_size'], sampler=SubsetRandomSampler(indices)) for indices in train_indices_list]
+	test_loaders = [DataLoader(dataset=train_dataset, batch_size=args['batch_size'], sampler=SubsetRandomSampler(indices)) for indices in test_indices_list]
+
+	import itertools
+	train_indices = list(itertools.chain.from_iterable(train_indices_list))
+	joint_loader = DataLoader(dataset=train_dataset, batch_size=args['batch_size'], sampler=SubsetRandomSampler(train_indices))
+	# test_loader = DataLoader(dataset=test_dataset, batch_size=10000, shuffle=True)
+
+	test_indices = list(itertools.chain.from_iterable(test_indices_list))
+	joint_test_loader = DataLoader(dataset=test_dataset, batch_size=args['batch_size'], sampler=SubsetRandomSampler(test_indices))
+
+	if not repeat:
+		return joint_loader, train_loaders, joint_test_loader, test_loaders
+	else:
+		repeated_train_loaders = [repeater(train_loader) for train_loader in train_loaders]
+		repeated_test_loaders = [repeater(test_loader) for test_loader in test_loaders]
+		# repeated_joint_test_loader = repeater(joint_test_loader)
+		# test_loaders = [repeated_joint_test_loader] + repeated_test_loaders
+		return joint_loader, repeated_train_loaders, joint_test_loader, repeated_test_loaders
 
 
-def add_update_to_model(model, update, weight=1.0, device=None):
-	if not update: return model
-	if device:
-		model = model.to(device)
-		update = [param.to(device) for param in update]
-			
-	for param_model, param_update in zip(model.parameters(), update):
-		param_model.data += weight * param_update.data
-	return model
 
-
-from itertools import repeat
+from itertools import repeat, product
 
 def repeater(arr):
 	for loader in repeat(arr):
 		for item in arr:
 			yield item
+
+
+def tabulate_dict(pairwise_dict, N):
+	from tabulate import tabulate
+
+	pairs = list(product(range(N), range(N)))
+	means = np.zeros((N, N))
+	stds = np.zeros((N, N))
+	for (i, j) in pairs:
+		pair = str(i)+'-'+str(j)
+		means[i, j] = np.mean(pairwise_dict[pair])
+		stds[i, j] = np.std(pairwise_dict[pair])
+
+	return tabulate(means, headers=range(N)), tabulate(stds, headers=range(N))
+
+
+
+def evaluate(model, test_loaders, args, M=50, plot=False, logdir=None, figs_dir=None):
+	'''
+	Arguments:
+		model: trained kernel, takes two inputs of the same shape
+		test_loaders: a list of data loaders
+		args: a dictionary used to store setting parameters
+		M: number of samples to draw for the t-statistic
+		plot: whether to plot the mmd and stats
+		logdir: the directy to store the pairwise mmd and tstat values
+		figs_dir: the directory to store the plotted figures
+	Returns:
+		mmd_dict, tstat_dict
+		mmd_dict: 
+			key is pairwise named, such as '1-1' participant 1 against himself, '0-3' participant 0 against participant 3
+			value is a list of length M, representing M sampled pairs of values
+		tstat_dict is defined similarly to mmd_dict
+	'''
+
+	N = args['n_participants'] + int(args['include_joint'])
+	assert N == len(test_loaders), "The number of loaders is not equal equal to the total number of (paricipants + joint)."
+	pairs = list(product(range(N), range(N)))
+	model.eval()
+	mmd_dict = defaultdict(list)
+	tstat_dict = defaultdict(list)
+	with torch.no_grad():
+		for data in zip(*test_loaders):
+			data = list(data)
+			for i in range(len(data)):
+				data[i][0], data[i][1] = data[i][0].cuda(), data[i][1].cuda()    					
+
+			for m in range(M):
+				for (i,j) in pairs:
+					if i != j:
+						size = len(data[i][0]) + len(data[j][0])
+						temp = torch.cat([data[i][0], data[j][0]])
+					else:
+						size = len(data[i][0])
+						temp = data[i][0]
+					rand_inds =  torch.randperm(size)
+					X, Y = temp[rand_inds[:size//2]], temp[rand_inds[size//2:]]
+					mmd_hat, t_stat = model(X, Y, pair=[i, j])
+
+					mmd_dict[str(i)+'-'+str(j)].append(mmd_hat.tolist())
+					tstat_dict[str(i)+'-'+str(j)].append(t_stat.tolist())
+
+	if not plot: 
+		return mmd_dict, tstat_dict
+
+	logdir = logdir or args['logdir']
+
+	with open(oj(logdir, 'mmd_dict'), 'w') as file:
+		file.write(json.dumps(mmd_dict))
+	
+	with open(oj(logdir, 'tstat_dict'), 'w') as file:
+		file.write(json.dumps(tstat_dict))
+
+	figs_dir = figs_dir or oj(args['logdir'], args['figs_dir'])
+	mmd_dir = oj(figs_dir, 'mmd')
+	tstat_dir = oj(figs_dir, 'tstat')
+	os.makedirs(mmd_dir, exist_ok=True)
+	os.makedirs(tstat_dir, exist_ok=True)
+
+
+	# plot and save MMD hats	
+	for i in range(N):
+		for j in range(N):
+			pair = str(i)+'-'+str(j)
+			mmd_values = np.asarray(mmd_dict[pair])*1e4 
+			sns.kdeplot(mmd_values, label=pair)
+
+		plt.title('{} vs others MMD values'.format(str(i)))
+		plt.xlabel('mmd values')
+		# Set the y axis label of the current axis.
+		plt.ylabel('density')
+		# Set a title of the current axes.
+		# show a legend on the plot
+		plt.legend()
+		# Display a figure.
+		plt.savefig(oj(mmd_dir, '-'+str(i)))
+		plt.clf()
+
+
+	# plot and save Tstats	
+	for i in range(N):
+		for j in range(N):
+			pair = str(i)+'-'+str(j)
+
+			tstat_values = np.asarray(tstat_dict[pair])*1e3
+			sns.kdeplot(tstat_values, label=pair)
+
+		plt.title('{} vs others tstats values'.format(str(i)))
+		plt.xlabel('tstat values')
+		# Set the y axis label of the current axis.
+		plt.ylabel('density')
+		# Set a title of the current axes.
+		# show a legend on the plot
+		plt.legend()
+		# Display a figure.
+		plt.savefig(oj(tstat_dir, '-'+str(i)))
+		plt.clf()
+
+	return mmd_dict, tstat_dict
+
+
 
 import copy
 import numpy as np
