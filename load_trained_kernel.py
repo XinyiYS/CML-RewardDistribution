@@ -31,10 +31,10 @@ if __name__=='__main__':
 	if 'include_joint' not in args:
 		args['include_joint'] = False
 
-	# Initialize the kernel
+	# Initialize the kernel, including initializing and loading pretrained weights for the shared feature extrator 
 	kernel, _ = construct_kernel(args)
 
-	# Load pretrained weights
+	# Load pretrained weights: including the individual MLP layers and the Gpytorch Hyperparameters
 	trained_kernel_dir = oj(load_dir, 'trained_kernels', 'model_-E61.pth')
 	kernel.load_state_dict(torch.load(trained_kernel_dir), strict=False)
 
