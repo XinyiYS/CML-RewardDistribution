@@ -66,3 +66,39 @@ class CIFAR_CVAE(nn.Module):
         mu, logvar = self.encode(x)
         z = self.latent_sample(mu, logvar)
         return self.decode(z), mu, logvar
+
+
+def vae_loss(recon_x, x, mu, logvar, variational_beta = 10):
+    # recon_x is the probability of a multivariate Bernoulli distribution p.
+    # -log(p(x)) is then the pixel-wise binary cross-entropy.
+    # Averaging or not averaging the binary cross-entropy over all pixels here
+    # is a subtle detail with big effect on training, since it changes the weight
+    # we need to pick for the other loss term by several orders of magnitude.
+    # Not averaging is the direct implementation of the negative log likelihood,
+    # but averaging makes the weight of the other loss term independent of the image resolution.
+    recon_loss = F.binary_cross_entropy(recon_x, x, reduction='sum')
+    
+    # KL-divergence between the prior distribution over latent vectors
+    # (the one we are going to sample from when generating new images)
+    # and the distribution estimated by the generator for the given image.
+    kldivergence = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+    
+    return recon_loss + variational_beta * kldivergence
+
+def load_pretrain(vae=None, path='CIFAR10_CVAE/model_-E800.pth'):
+    vae = vae or VariationalAutoencoder()
+    try:
+        vae.load_state_dict(torch.load(path))
+        print("Pretrained CIFAR10 CVAE model <{}> loaded".format(path))
+    except Exception as e:
+        print(e)
+        directory = 'CIFAR10_CVAE'
+        filename = 'model_-E800.pth' #'vae_2d.pth'
+        # if not os.path.isdir(directory):
+        #     os.makedirs(directory)
+        # print('downloading pretrained model ...')
+        # urllib.request.urlretrieve ("http://geometry.cs.ucl.ac.uk/creativeai/pretrained/"+filename, os.path.join(directory, filename))
+        # vae.load_state_dict(torch.load( os.path.join(directory,filename)))
+        # print("Pretrained MNIST CVAE model <{}> loaded".format(filename))
+        print("Pretrained CIFAR10 CVAE model not found. Loading unsuccessful.")
+    return vae

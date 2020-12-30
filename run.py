@@ -135,13 +135,13 @@ class MLP(nn.Module):
 # need a kernel collectively defined by gpytorch and a DNN
 def objective(args, model, optimizer, trial, joint_loader, train_loaders, test_loaders, ):
 
-	N = args['n_participants']
+	N = args['n_participants'] + int(args['include_joint'])
 	pairs = list(product(range(N), range(N)))
 	with gpytorch.settings.num_likelihood_samples(8):
 		for epoch in range(args['epochs']):
 			joint_loader_iter = tqdm.notebook.tqdm(joint_loader, desc=f"(Epoch {epoch}) Minibatch")
 			# loaders = [joint_loader_iter] + train_loaders
-			loaders = train_loaders
+			loaders = [joint_loader_iter] + train_loaders
 			model.train()
 
 			for batch_id, data in enumerate(zip(*loaders)):
@@ -191,7 +191,7 @@ def objective(args, model, optimizer, trial, joint_loader, train_loaders, test_l
 				raise optuna.exceptions.TrialPruned()
 	return obj
 
-def prepare_loaders(args):
+def prepare_loaders(args, repeat=False):
 
 	train_dataset, test_dataset = load_dataset(args=args)
 	train_indices_list = split(args['n_samples'], args['n_participants'], train_dataset=train_dataset, mode=args['split_mode'])
@@ -218,15 +218,14 @@ def prepare_loaders(args):
 	test_indices = list(itertools.chain.from_iterable(test_indices_list))
 	joint_test_loader = DataLoader(dataset=test_dataset, batch_size=args['batch_size'], sampler=SubsetRandomSampler(test_indices))
 
-	# repeated_train_loaders = [repeater(train_loader) for train_loader in train_loaders]
-	# repeated_test_loaders = [repeater(test_loader) for test_loader in test_loaders]
-
-	# repeated_joint_test_loader = repeater(joint_test_loader)
-	# test_loaders = [repeated_joint_test_loader] + repeated_test_loaders
-
-	return joint_loader, train_loaders, test_loaders
-
-	# return joint_loader, repeated_train_loaders, test_loaders
+	if not repeat:
+		return joint_loader, train_loaders, joint_test_loader, test_loaders
+	else:
+		repeated_train_loaders = [repeater(train_loader) for train_loader in train_loaders]
+		repeated_test_loaders = [repeater(test_loader) for test_loader in test_loaders]
+		# repeated_joint_test_loader = repeater(joint_test_loader)
+		# test_loaders = [repeated_joint_test_loader] + repeated_test_loaders
+		return joint_loader, repeated_train_loaders, joint_test_loader, repeated_test_loaders
 
 def construct_kernel(args):
 
@@ -236,8 +235,9 @@ def construct_kernel(args):
 
 	# --------------- Shared Feature extractor module ---------------
 	if args['dataset'] == 'CIFAR10':
-		from models.CIFAR_CVAE import CIFAR_CVAE
-		feature_extractor = CIFAR_CVAE(latent_dims=args['num_features'])
+		from models.CIFAR_CVAE import CIFAR_CVAE, load_pretrain
+		CVAE = CIFAR_CVAE(latent_dims=args['num_features'])
+		feature_extractor = load_pretrain(vae=CVAE, path='CIFAR10_CVAE/model_-E800.pth')
 	else:
 		# MNIST
 		from models.CVAE import VariationalAutoencoder, load_pretrain
@@ -246,7 +246,7 @@ def construct_kernel(args):
 	# feature_extractor = MLP_MNIST(in_dim = imageSize*imageSize, out_dim=num_features, device=device)
 
 	# --------------- Individual layers after the Shared Feature extractor module ---------------
-	indi_feature_extractors = [MLP(input_dim=args['num_features'], output_dim=args['num_features']) for _ in range(args['n_participants'])]
+	indi_feature_extractors = [MLP(input_dim=args['num_features'], output_dim=args['num_features']) for _ in range(args['n_participants'] + int(args['include_joint']))]
 
 	# --------------- Gaussian Process/Kernel module ---------------
 	grid_bounds=(-10., 10.)
@@ -286,7 +286,8 @@ import seaborn as sns
 import json
 
 def evaluate(model, test_loaders, args, M=50, plot=False):
-	N = args['n_participants']
+	N = args['n_participants'] + int(args['include_joint'])
+	assert N == len(test_loaders), "The number of loaders is not equal equal to the total number of (paricipants + joint)."
 	pairs = list(product(range(N), range(N)))
 	model.eval()
 	mmd_dict = defaultdict(list)
@@ -327,12 +328,11 @@ def evaluate(model, test_loaders, args, M=50, plot=False):
 	os.makedirs(tstat_dir, exist_ok=True)
 
 
-	for i in range(args['n_participants']):
-		for j in range(args['n_participants']):
+	# plot and save MMD hats	
+	for i in range(N):
+		for j in range(N):
 			pair = str(i)+'-'+str(j)
-
-			# plot and save MMD hats	
-			mmd_values = np.asarray(mmd_dict[pair])*10  
+			mmd_values = np.asarray(mmd_dict[pair])*1e4 
 			sns.kdeplot(mmd_values, label=pair)
 
 		plt.title('{} vs others MMD values'.format(str(i)))
@@ -348,11 +348,11 @@ def evaluate(model, test_loaders, args, M=50, plot=False):
 
 
 	# plot and save Tstats	
-	for i in range(args['n_participants']):
-		for j in range(args['n_participants']):
+	for i in range(N):
+		for j in range(N):
 			pair = str(i)+'-'+str(j)
 
-			tstat_values = np.asarray(tstat_dict[pair])*10
+			tstat_values = np.asarray(tstat_dict[pair])*1e3
 			sns.kdeplot(tstat_values, label=pair)
 
 		plt.title('{} vs others tstats values'.format(str(i)))
@@ -372,7 +372,6 @@ def main(trial):
 	args = {}
 	args['noise_seed'] = 1234
 
-
 	# ---------- Data setting ----------
 
 	n_participants = args['n_participants'] = 5
@@ -380,12 +379,12 @@ def main(trial):
 	args['n_samples'] = args['n_participants'] * args['n_samples_per_participant']
 	args['split_mode'] = "disjointclasses" #@param ["disjointclasses","uniform"," classimbalance", "powerlaw"]
 
-	# ---------- Feature extractor and latent dim setting ----------
+	args['include_joint'] = True
 
 	args['dataset'] = 'CIFAR10'
+	# ---------- Feature extractor and latent dim setting ----------
 
-
-	args['num_features'] = 128 if args['dataset'] == 'CIFAR10' else 10 # latent_dims
+	args['num_features'] = 512 if args['dataset'] == 'CIFAR10' else 10 # latent_dims
 	args['num_filters'] = 64 # fixed
 	# ngf number of filters for encoder/generator
 	# ndf number of filters for decoder/discriminator
@@ -395,10 +394,8 @@ def main(trial):
 	args['num_channels'] = 3 if args['dataset'] == 'CIFAR10' else 1
 	args['image_size'] = 32 if args['dataset'] == 'CIFAR10' else 28
 
-	# fixed for MNIST
+	# fixed for MNIST and CIFAR10
 	args['num_classes'] = 10
-
-
 
 	# ---------- Optuna ----------
 	args['epochs'] = trial.suggest_int("epochs", 10, 100, 5)
@@ -415,10 +412,10 @@ def main(trial):
 
 	args['kernel_dir'] = 'trained_kernels'
 	args['figs_dir'] = 'figs'
-	args['save_interval'] = 10
+	args['save_interval'] = 25
 
-	args['train'] = True # if False, load the model from <experiment_dir> for evaluation
-	args['experiment_dir'] = 'logs/Experiment_2020-12-16-19-28'
+	# args['train'] = True # if False, load the model from <experiment_dir> for evaluation
+	# args['experiment_dir'] = 'logs/Experiment_2020-12-16-19-28'
 
 	# --------------- Create and Load Model ---------------
 
@@ -434,7 +431,7 @@ def main(trial):
 	sys.stdout = open(os.path.join(logdir, 'log'), "w")
 
 	# --------------- Preparing Datasets and Dataloaders ---------------
-	joint_loader, train_loaders, test_loaders = prepare_loaders(args)
+	joint_loader, train_loaders, joint_test_loader, test_loaders = prepare_loaders(args, repeat=args['include_joint'])
 
 	# --------------- Training ---------------
 	os.makedirs(oj(args['logdir'], args['kernel_dir']) , exist_ok=True)
@@ -442,7 +439,10 @@ def main(trial):
 	obj_value = objective(args, model, optimizer, trial, joint_loader, train_loaders, test_loaders)
 
 	# --------------- Evaluating Performance ---------------
-	evaluate(model, test_loaders, args, M=100, plot=True)
+	if args['include_joint']:
+		evaluate(model, [joint_test_loader] + test_loaders, args, M=5, plot=True)
+	else:
+		evaluate(model, test_loaders, args, M=5, plot=True)
 
 	return obj_value
 
