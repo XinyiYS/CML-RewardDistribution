@@ -355,9 +355,5 @@ from utils.mmd import mmd, t_statistic
 
 import optuna
 if __name__=='__main__':
-
-
-	train = False
-	if train:
-		run()
+	run()
 
