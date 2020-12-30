@@ -133,18 +133,15 @@ class MLP(nn.Module):
 		return self.fc2(x)
 
 # need a kernel collectively defined by gpytorch and a DNN
-def objective(args, model, optimizer, trial, joint_loader, train_loaders, test_loaders, ):
+def objective(args, model, optimizer, trial, train_loaders, test_loaders):
 
 	N = args['n_participants'] + int(args['include_joint'])
 	pairs = list(product(range(N), range(N)))
 	with gpytorch.settings.num_likelihood_samples(8):
 		for epoch in range(args['epochs']):
-			joint_loader_iter = tqdm.notebook.tqdm(joint_loader, desc=f"(Epoch {epoch}) Minibatch")
-			# loaders = [joint_loader_iter] + train_loaders
-			loaders = [joint_loader_iter] + train_loaders
 			model.train()
 
-			for batch_id, data in enumerate(zip(*loaders)):
+			for batch_id, data in enumerate(zip(*train_loaders)):
 				# data is of length 5 [(data1, target1)... (data5, target5)]
 				data = list(data)
 				for i in range(len(data)):
@@ -169,7 +166,6 @@ def objective(args, model, optimizer, trial, joint_loader, train_loaders, test_l
 				loss = -torch.min(mmd_losses)
 				loss.backward()
 				optimizer.step()
-				joint_loader_iter.set_postfix(loss=loss.item(), mmd_losses = mmd_losses.tolist())
 
 			if epoch % args['save_interval'] == 0:
 				torch.save(model.state_dict(), oj(args['logdir'], args['kernel_dir'], 'model_-E{}.pth'.format(epoch+1)))
@@ -305,7 +301,7 @@ def train_main(trial):
 	args['experiment_dir'] = setup_experiment_dir()
 	logdir = setup_dir(args['experiment_dir'] , args)
 	args['logdir'] = logdir
-
+	exit()
 	write_model(model, logdir, args)	
 	sys.stdout = open(os.path.join(logdir, 'log'), "w")
 
@@ -315,13 +311,13 @@ def train_main(trial):
 	# --------------- Training ---------------
 	os.makedirs(oj(args['logdir'], args['kernel_dir']) , exist_ok=True)
 
-	obj_value = objective(args, model, optimizer, trial, joint_loader, train_loaders, test_loaders)
+	if args['include_joint']:
+		train_loaders = [joint_loader] + train_loaders
+		test_loaders = [joint_test_loader] + test_loaders
+	obj_value = objective(args, model, optimizer, trial, train_loaders, test_loaders)
 
 	# --------------- Evaluating Performance ---------------
-	if args['include_joint']:
-		evaluate(model, [joint_test_loader] + test_loaders, args, M=5, plot=True)
-	else:
-		evaluate(model, test_loaders, args, M=5, plot=True)
+	evaluate(model, test_loaders, args, M=50, plot=True)
 
 	return obj_value
 
