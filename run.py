@@ -222,12 +222,9 @@ def construct_kernel(args):
 	model = DKLModel(feature_extractor, indi_feature_extractors, gp_layer)
 
 	if torch.cuda.is_available():
-		if torch.cuda.device_count()>1:
-			model = nn.DataParallel(model, device_ids = list(range(torch.cuda.device_count())))
-		else:
-			model = model.cuda()
-			model.feature_extractor = model.feature_extractor.cuda()
-			model.indi_feature_extractors = [f.cuda() for f in model.indi_feature_extractors]
+		model = model.cuda()
+		model.feature_extractor = model.feature_extractor.cuda()
+		model.indi_feature_extractors = [f.cuda() for f in model.indi_feature_extractors]
 
 	# ---------- Optimizer and Scheduler ----------
 	optimizer = getattr(optim, args['optimizer'])([
