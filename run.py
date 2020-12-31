@@ -17,7 +17,7 @@ from torch.optim.lr_scheduler import MultiStepLR
 
 import tqdm
 import gpytorch
-from gpytorch.kernels import ScaleKernel, AdditiveKernel, RBFKernel, PolynomialKernel, MaternKernel
+from gpytorch.kernels import ScaleKernel, AdditiveKernel, RBFKernel, PolynomialKernel, MaternKernel, MultiDeviceKernel
 
 class GaussianProcessLayer(gpytorch.models.ApproximateGP):
 	def __init__(self, num_dim, grid_bounds=(-10., 10.), grid_size=64, covar_module=None):
@@ -191,6 +191,13 @@ def objective(args, model, optimizer, trial, train_loaders, test_loaders):
 
 def construct_kernel(args):
 
+	# --------------- Set up available GPUs ---------------
+	device_ids = []
+	if torch.cuda.is_available():
+		if torch.cuda.device_count()>1:
+			device_ids = list(range(torch.cuda.device_count()))
+		else:
+			device_ids = [0]
 
 	# --------------- Feature extractor module ---------------
 
@@ -208,30 +215,31 @@ def construct_kernel(args):
 
 	# --------------- Individual layers after the Shared Feature extractor module ---------------
 	indi_feature_extractors = [MLP(input_dim=args['num_features'], output_dim=args['num_features']) for _ in range(args['n_participants'] + int(args['include_joint']))]
+	
+	if len(device_ids) > 1:
+		feature_extractor = nn.DataParallel(feature_extractor, device_ids=device_ids)
+		indi_feature_extractors = [nn.DataParallel(indi, device_ids=device_ids) for indi in indi_feature_extractors]
+	elif len(device_ids) == 1:
+		feature_extractor = model.feature_extractor.cuda()
+		indi_feature_extractors = [f.cuda() for f in indi_feature_extractors]
+	
 
 	# --------------- Gaussian Process/Kernel module ---------------
 	grid_bounds=(-10., 10.)
 	suggested_kernels = [getattr(gpytorch.kernels, base_kernel)(lengthscale_prior=gpytorch.priors.SmoothedBoxPrior(
-					math.exp(-1), math.exp(1), sigma=0.1, transform=torch.exp)) for base_kernel in args['base_kernels'] ]
+					math.exp(-1), math.exp(1), sigma=0.1, transform=torch.exp)) for base_kernel in args['base_kernels'] ]	
 	covar_module = ScaleKernel(AdditiveKernel(*suggested_kernels))
+
+	if len(device_ids) > 1: covar_module = MultiDeviceKernel(covar_module, device_ids=device_ids)
+
 	gp_layer = GaussianProcessLayer(covar_module=covar_module, num_dim=args['num_features'], grid_bounds=grid_bounds)
 
-
+	if len(device_ids) == 1: gp_layer = gp_layer.cuda()
 
 	# --------------- Complete Deep Kernel ---------------
 	model = DKLModel(feature_extractor, indi_feature_extractors, gp_layer)
 
-	if torch.cuda.is_available():
-		if torch.cuda.device_count()>1:
-			device_ids = list(range(torch.cuda.device_count()))
-			model.feature_extractor = nn.DataParallel(model.feature_extractor, device_ids=device_ids)
-			model.indi_feature_extractors = [ nn.DataParallel(indi, device_ids=device_ids) for indi in model.indi_feature_extractors]
-			model.gp_layer = nn.DataParallel(model.gp_layer, device_ids=device_ids)
-			# model = nn.DataParallel(model, device_ids = list(range(torch.cuda.device_count())))
-		else:
-			model = model.cuda()
-			model.feature_extractor = model.feature_extractor.cuda()
-			model.indi_feature_extractors = [f.cuda() for f in model.indi_feature_extractors]
+
 
 	# ---------- Optimizer and Scheduler ----------
 	optimizer = getattr(optim, args['optimizer'])([
@@ -277,9 +285,9 @@ def train_main(trial):
 	args['num_classes'] = 10
 
 	# ---------- Optuna ----------
-	args['epochs'] = trial.suggest_int("epochs", 10, 100, 5)
+	args['epochs'] = trial.suggest_int("epochs", 10, 100, 10)
 	# args['epochs'] = 0
-	args['batch_size'] = trial.suggest_int("batch_size", 32, 64, 16)
+	args['batch_size'] = trial.suggest_int("batch_size", 256, 1024, 128)
 
 	args['optimizer'] = trial.suggest_categorical("optimizer", ["Adam", "SGD"])
 	args['lr'] = trial.suggest_float("lr", 1e-5, 1e-1, log=True)
