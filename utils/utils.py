@@ -116,7 +116,6 @@ def split(n_samples, n_participants, train_dataset=None, mode='uniform'):
 	return train_indices
 
 
-
 def prepare_loaders(args, repeat=False):
 
 	train_dataset, test_dataset = load_dataset(args=args)

@@ -65,14 +65,18 @@ class DKLModel(gpytorch.Module):
 		super(DKLModel, self).__init__()
 		self.feature_extractor = feature_extractor
 		self.indi_feature_extractors = indi_feature_extractors
+
 		self.gp_layer = gp_layer
 
 	def forward(self, x1, x2, pair, A=None, B=None, C=None):
 		features1 = self.get_vae_features(x1)
 		features2 = self.get_vae_features(x2)
 
-		features1 = self.indi_feature_extractors[pair[0]](features1)
-		features2 = self.indi_feature_extractors[pair[1]](features2)
+		features1 = self.indi_feature_extractors(features1)
+		features2 = self.indi_feature_extractors(features2)
+		
+		# features1 = self.indi_feature_extractors[pair[0]](features1)
+		# features2 = self.indi_feature_extractors[pair[1]](features2)
 		mmd_2, Kxx_, Kxy, Kyy_ = mmd(features1.reshape(len(x1), -1), features2.reshape(len(x2), -1), k=self.gp_layer.covar_module)
 		t_stat = t_statistic(mmd_2, Kxx_, Kxy, Kyy_)
 		# if A is None:
@@ -197,8 +201,9 @@ def construct_kernel(args):
 
 	# Individual MLP feature extractors for each participant
 	# 1 fully connected layer -> sigmoid -> 1 fully connected layer
-	indi_feature_extractors = nn.ModuleList([nn.Linear(args['num_features'], min(args['num_features'], 32))
-		for i in range(args['n_participants']+int(args['include_joint']))])
+	# indi_feature_extractors = nn.ModuleList([nn.Linear(args['num_features'], min(args['num_features'], 32))
+		# for i in range(args['n_participants']+int(args['include_joint']))])
+	indi_feature_extractors = nn.Linear(args['num_features'], min(args['num_features'], 128))
 	# indi_feature_extractors = nn.ModuleList([nn.Sequential(nn.Linear(args['num_features'], args['num_features']//2), nn.Sigmoid(), nn.Linear(args['num_features']//2, args['num_features'])) 
 		# for i in range(args['n_participants']+int(args['include_joint']))])
 
