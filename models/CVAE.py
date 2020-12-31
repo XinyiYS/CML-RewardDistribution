@@ -95,7 +95,7 @@ def load_pretrain(vae=None, path='MNIST_CVAE/vae_10d.pth'):
             os.makedirs(directory)
         print('downloading pretrained model ...')
         urllib.request.urlretrieve ("http://geometry.cs.ucl.ac.uk/creativeai/pretrained/"+filename, os.path.join(directory, filename))
-        vae.load_state_dict(torch.load( os.path.join(directory,filename)))
+        vae.load_state_dict(torch.load(os.path.join(directory,filename)))
 
         print("Pretrained MNIST CVAE model <{}> loaded".format(filename))
     return vae

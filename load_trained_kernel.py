@@ -4,14 +4,15 @@ from ast import literal_eval
 
 import torch
 
-from utils.utils import tabulate_dict, prepare_loaders, evaluate
+from utils.utils import tabulate_dict, prepare_loaders, evaluate, init_deterministic
 from run import construct_kernel
 
 
 if __name__=='__main__':
 
 	# Experiment dir
-	load_dir = 'server_logs/CML/logs/Experiment_2020-12-29-22-20/N1000-E70-B512'
+	load_dir = 'CIFAR10/N3000-E10-B768' # 'MNIST/N2000-E30-B1024'
+
 
 	# Read the kernel architecture hyperparameters
 	args = {} 
@@ -23,27 +24,26 @@ if __name__=='__main__':
 				args[key] = literal_eval(value)
 			except Exception as e:
 				args[key] = value
-	
-	# Set the dataset parameters
-	if 'dataset' not in args:
-		args['dataset'] = 'MNIST'
+	init_deterministic(args['noise_seed']) # comment this out for faster runtime
 
-	if 'include_joint' not in args:
-		args['include_joint'] = False
 
 	# Initialize the kernel, including initializing and loading pretrained weights for the shared feature extrator 
 	kernel, _ = construct_kernel(args)
 
 	# Load pretrained weights: including the individual MLP layers and the Gpytorch Hyperparameters
-	trained_kernel_dir = oj(load_dir, 'trained_kernels', 'model_-E61.pth')
+	trained_kernel_dir = oj(load_dir, 'trained_kernels', 'model_-E1.pth')
 	kernel.load_state_dict(torch.load(trained_kernel_dir), strict=False)
 
 
 	# Construct data loaders for a quick evaluation
 	joint_loader, train_loaders, joint_test_loader, test_loaders = prepare_loaders(args, repeat=args['include_joint'])
 
-	test_logs_dir = "test_logs_dir"
+	test_logs_dir = oj("test_logs_dir", args['dataset'])
 	os.makedirs(test_logs_dir, exist_ok=True)
+	if args['include_joint']:
+		train_loaders = [joint_loader] + train_loaders
+		test_loaders = [joint_test_loader] + test_loaders
+
 	mmd_dict, tstat_dict = evaluate(kernel, test_loaders, args, M=50, plot=True, logdir=test_logs_dir, figs_dir = oj(test_logs_dir, 'figs'))
 
 

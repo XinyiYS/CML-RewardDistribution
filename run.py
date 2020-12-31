@@ -67,7 +67,6 @@ class DKLModel(gpytorch.Module):
 		self.indi_feature_extractors = indi_feature_extractors
 		self.gp_layer = gp_layer
 
-	
 	def forward(self, x1, x2, pair, A=None, B=None, C=None):
 		features1 = self.get_vae_features(x1)
 		features2 = self.get_vae_features(x2)
@@ -120,17 +119,6 @@ class DKLModel(gpytorch.Module):
 		t_stat = t_statistic(mmd_2, Kxx_, Kxy, Kyy_)        
 		return mmd_2, t_stat, self.gp_layer(features1), self.gp_layer(features2)
 	'''
-
-# A simple individual feature extrator on top of the shared feature extrators
-class MLP(nn.Module):
-	def __init__(self, input_dim=10, output_dim=5, device=None):
-		super(MLP, self).__init__()
-		self.fc1 = nn.Linear(input_dim, 10)
-		self.fc2 = nn.Linear(10, output_dim)
-
-	def forward(self, x):
-		x = torch.sigmoid(self.fc1(x))
-		return self.fc2(x)
 
 # need a kernel collectively defined by gpytorch and a DNN
 def objective(args, model, optimizer, trial, train_loaders, test_loaders):
@@ -188,7 +176,6 @@ def objective(args, model, optimizer, trial, train_loaders, test_loaders):
 	return obj
 
 
-
 def construct_kernel(args):
 
 
@@ -207,7 +194,13 @@ def construct_kernel(args):
 		feature_extractor = vae
 
 	# --------------- Individual layers after the Shared Feature extractor module ---------------
-	indi_feature_extractors = [MLP(input_dim=args['num_features'], output_dim=args['num_features']) for _ in range(args['n_participants'] + int(args['include_joint']))]
+
+	# Individual MLP feature extractors for each participant
+	# 1 fully connected layer -> sigmoid -> 1 fully connected layer
+	indi_feature_extractors = nn.ModuleList([nn.Linear(args['num_features'], min(args['num_features'], 32))
+		for i in range(args['n_participants']+int(args['include_joint']))])
+	# indi_feature_extractors = nn.ModuleList([nn.Sequential(nn.Linear(args['num_features'], args['num_features']//2), nn.Sigmoid(), nn.Linear(args['num_features']//2, args['num_features'])) 
+		# for i in range(args['n_participants']+int(args['include_joint']))])
 
 	# --------------- Gaussian Process/Kernel module ---------------
 	grid_bounds=(-10., 10.)
@@ -217,21 +210,17 @@ def construct_kernel(args):
 	gp_layer = GaussianProcessLayer(covar_module=covar_module, num_dim=args['num_features'], grid_bounds=grid_bounds)
 
 
-
 	# --------------- Complete Deep Kernel ---------------
 	model = DKLModel(feature_extractor, indi_feature_extractors, gp_layer)
 
 	if torch.cuda.is_available():
-		if torch.cuda.device_count()>1:
-			model = nn.DataParallel(model, device_ids = list(range(torch.cuda.device_count())))
-		else:
-			model = model.cuda()
-			model.feature_extractor = model.feature_extractor.cuda()
-			model.indi_feature_extractors = [f.cuda() for f in model.indi_feature_extractors]
+		model = model.cuda()
+		model.feature_extractor = model.feature_extractor.cuda()
 
 	# ---------- Optimizer and Scheduler ----------
 	optimizer = getattr(optim, args['optimizer'])([
-		{'params': model.feature_extractor.parameters(), 'weight_decay': 1e-4},
+		{'params': model.feature_extractor.parameters(), 'lr': args['lr'] * 1e-2, 'weight_decay': 1e-4},
+		{'params': model.indi_feature_extractors.parameters(),  'lr': args['lr'], 'weight_decay': 1e-4},
 		{'params': model.gp_layer.hyperparameters(), 'lr': args['lr'] * 0.1, 'weight_decay':1e-4},
 		{'params': model.gp_layer.variational_parameters(), 'weight_decay':1e-4},
 	], lr=args['lr'], weight_decay=0)
@@ -247,16 +236,18 @@ def train_main(trial):
 	args = {}
 	args['noise_seed'] = 1234
 
+	init_deterministic(args['noise_seed']) # comment this out for faster training
+
 	# ---------- Data setting ----------
 
 	n_participants = args['n_participants'] = 5
-	args['n_samples_per_participant'] = 1000
+	args['n_samples_per_participant'] = 2000
 	args['n_samples'] = args['n_participants'] * args['n_samples_per_participant']
 	args['split_mode'] = "disjointclasses" #@param ["disjointclasses","uniform"," classimbalance", "powerlaw"]
 
 	args['include_joint'] = True
 
-	args['dataset'] = 'CIFAR10'
+	args['dataset'] = 'MNIST'
 	# ---------- Feature extractor and latent dim setting ----------
 
 	args['num_features'] = 512 if args['dataset'] == 'CIFAR10' else 10 # latent_dims
@@ -345,7 +336,7 @@ def run():
 
 
 # from models.feature_extractors import CNN_MNIST, MLP_MNIST
-from utils.utils import evaluate, prepare_loaders, setup_experiment_dir, setup_dir, write_model, tabulate_dict
+from utils.utils import evaluate, prepare_loaders, init_deterministic, setup_experiment_dir, setup_dir, write_model, tabulate_dict
 from utils.mmd import mmd, t_statistic
 
 
