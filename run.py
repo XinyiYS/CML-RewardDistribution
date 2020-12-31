@@ -223,7 +223,11 @@ def construct_kernel(args):
 
 	if torch.cuda.is_available():
 		if torch.cuda.device_count()>1:
-			model = nn.DataParallel(model, device_ids = list(range(torch.cuda.device_count())))
+			device_ids = list(range(torch.cuda.device_count()))
+			model.feature_extractor = nn.DataParallel(model.feature_extractor, device_ids=device_ids)
+			model.indi_feature_extractors = [ nn.DataParallel(indi, device_ids=device_ids) for indi in model.indi_feature_extractors]
+			model.gp_layer = nn.DataParallel(model.gp_layer, device_ids=device_ids)
+			# model = nn.DataParallel(model, device_ids = list(range(torch.cuda.device_count())))
 		else:
 			model = model.cuda()
 			model.feature_extractor = model.feature_extractor.cuda()
