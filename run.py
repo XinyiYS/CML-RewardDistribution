@@ -236,16 +236,18 @@ def train_main(trial):
 	args = {}
 	args['noise_seed'] = 1234
 
+	init_deterministic(args['noise_seed']) # comment this out for faster training
+
 	# ---------- Data setting ----------
 
 	n_participants = args['n_participants'] = 5
-	args['n_samples_per_participant'] = 1000
+	args['n_samples_per_participant'] = 2000
 	args['n_samples'] = args['n_participants'] * args['n_samples_per_participant']
 	args['split_mode'] = "disjointclasses" #@param ["disjointclasses","uniform"," classimbalance", "powerlaw"]
 
 	args['include_joint'] = True
 
-	args['dataset'] = 'CIFAR10'
+	args['dataset'] = 'MNIST'
 	# ---------- Feature extractor and latent dim setting ----------
 
 	args['num_features'] = 512 if args['dataset'] == 'CIFAR10' else 10 # latent_dims
@@ -334,7 +336,7 @@ def run():
 
 
 # from models.feature_extractors import CNN_MNIST, MLP_MNIST
-from utils.utils import evaluate, prepare_loaders, setup_experiment_dir, setup_dir, write_model, tabulate_dict
+from utils.utils import evaluate, prepare_loaders, init_deterministic, setup_experiment_dir, setup_dir, write_model, tabulate_dict
 from utils.mmd import mmd, t_statistic
 
 

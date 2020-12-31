@@ -11,6 +11,15 @@ import seaborn as sns
 import json
 
 
+def init_deterministic(seed=1234):
+	# call init_deterministic() in each run_experiments function call
+
+	torch.manual_seed(seed)
+	np.random.seed(seed)
+	torch.backends.cudnn.deterministic = True
+	torch.backends.cudnn.benchmark = False
+	random.seed(seed)
+
 def split(n_samples, n_participants, train_dataset=None, mode='uniform'):
 	'''
 	Args:
@@ -143,6 +152,7 @@ def prepare_loaders(args, repeat=False):
 		# repeated_joint_test_loader = repeater(joint_test_loader)
 		# test_loaders = [repeated_joint_test_loader] + repeated_test_loaders
 		return joint_loader, repeated_train_loaders, joint_test_loader, repeated_test_loaders
+
 
 
 
