@@ -4,14 +4,15 @@ from ast import literal_eval
 
 import torch
 
-from utils.utils import tabulate_dict, prepare_loaders, evaluate
+from utils.utils import tabulate_dict, prepare_loaders, evaluate, init_deterministic
 from run import construct_kernel
 
 
 if __name__=='__main__':
 
 	# Experiment dir
-	load_dir = 'server_logs/CML/logs/Experiment_2020-12-29-22-20/N1000-E70-B512'
+	load_dir = 'CIFAR10/N3000-E10-B768' # 'MNIST/N2000-E30-B1024'
+
 
 	# Read the kernel architecture hyperparameters
 	args = {} 
@@ -23,13 +24,8 @@ if __name__=='__main__':
 				args[key] = literal_eval(value)
 			except Exception as e:
 				args[key] = value
-	
-	# Set the dataset parameters
-	if 'dataset' not in args:
-		args['dataset'] = 'MNIST'
+	init_deterministic(args['noise_seed']) # comment this out for faster runtime
 
-	if 'include_joint' not in args:
-		args['include_joint'] = False
 
 	# Initialize the kernel, including initializing and loading pretrained weights for the shared feature extrator 
 	kernel, _ = construct_kernel(args)
