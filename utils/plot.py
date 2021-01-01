@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import seaborn as sns
+import torch
 sns.set(rc={'figure.figsize':(8, 8)})
 def plot_mmd_vs(all_mmd_vs, index=0, all=False, alpha=1e5, save=None, _type='mmd'):
 	'''
