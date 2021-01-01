@@ -76,7 +76,7 @@ def weighted_sampling(candidates, D, mu_target, Y, kernel, greed):
             
             weight_max = np.amax(weights)
             weight_min = np.amin(weights)
-            weights = (weights - weight_min) / weight_max  # Scale weights to [0, 1] because greed factor may not affect
+            weights = (weights - weight_min) / (weight_max - weight_min)  # Scale weights to [0, 1] because greed factor may not affect
             # sampling for very small/large weight values
 
             probs = softmax(greed * weights)
@@ -116,7 +116,7 @@ def process_func(params):
         return weighted_sampling(candidates, D_i, mu, Y, kernel, greed)
 
 
-def con_div(candidates, Y, phi, D, kernel, num_perms=100, greeds=None, num_samples=None):
+def con_div(candidates, Y, phi, D, kernel, num_perms=100, greeds=None, eta=None):
     """
     Controlled divergence algorithm. Defaults to pure greedy algorithm
     :param candidates: Candidate points from generator distribution, one for each party. array of shape (k, m, d)
@@ -127,7 +127,7 @@ def con_div(candidates, Y, phi, D, kernel, num_perms=100, greeds=None, num_sampl
     :param greeds: list of floats in range [0, inf) of size (k). 0 corresponds to pure random sampling, inf
     corresponds to pure greedy. Leave as None to set all to pure greedy. Set individual values to -1 for pure greedy
     for specific parties
-    :param num_samples: number of samples used to calculate MMD each time in permutation sampling. The higher this is, 
+    :param eta: fraction of samples used to calculate MMD each time in permutation sampling. The higher this is, 
     the smaller the variance of the estimate
     """
     k = D.shape[0]
@@ -135,7 +135,7 @@ def con_div(candidates, Y, phi, D, kernel, num_perms=100, greeds=None, num_sampl
         greeds = [-1] * k
 
     # Work with negative mmds from here on, so larger is better
-    null_neg_mmds = sorted([-val for val in perm_sampling(np.concatenate(D), Y, kernel, num_perms, num_samples)])
+    null_neg_mmds = sorted([-val for val in perm_sampling(np.concatenate(D), Y, kernel, num_perms, eta)])
 
     # Remove estimates above 0 as they are unlikely to be reached without an extremely large number of candidates
     for i in range(len(null_neg_mmds)):

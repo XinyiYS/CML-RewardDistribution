@@ -93,24 +93,24 @@ def t_statistic(mmd_2, Kxx_, Kxy, Kyy_):
 
     return torch.div(mmd_2, torch.sqrt(vhat))
 
-# def mmd(X, Y, k):
-#     """
-#     Calculates unbiased MMD^2. A, B and C are the pairwise-XX, pairwise-XY, pairwise-YY summation terms respectively.
-#     :param X: array of shape (n, d)
-#     :param Y: array of shape (m, d)
-#     :param k: GPyTorch kernel
-#     :return: MMD^2, A, B, C
-#     """
-#     n = X.shape[0]
-#     m = Y.shape[0]
-#     X_tens = torch.tensor(X)
-#     Y_tens = torch.tensor(Y)
+def mmd_np(X, Y, k):
+     """
+     Calculates unbiased MMD^2. A, B and C are the pairwise-XX, pairwise-XY, pairwise-YY summation terms respectively.
+     :param X: array of shape (n, d)
+     :param Y: array of shape (m, d)
+     :param k: GPyTorch kernel
+     :return: MMD^2, A, B, C
+     """
+     n = X.shape[0]
+     m = Y.shape[0]
+     X_tens = torch.tensor(X)
+     Y_tens = torch.tensor(Y)
 
-#     A = (1 / (n * (n - 1))) * (torch.sum(k(X_tens).evaluate()) - torch.sum(torch.diag(k(X_tens).evaluate())))
-#     B = -(2 / (n * m)) * torch.sum(k(X_tens, Y_tens).evaluate())
-#     C = (1 / (m * (m - 1))) * (torch.sum(k(Y_tens).evaluate()) - torch.sum(torch.diag(k(Y_tens).evaluate())))
+     A = (1 / (n * (n - 1))) * (torch.sum(k(X_tens).evaluate()) - torch.sum(torch.diag(k(X_tens).evaluate())))
+     B = -(2 / (n * m)) * torch.sum(k(X_tens, Y_tens).evaluate())
+     C = (1 / (m * (m - 1))) * (torch.sum(k(Y_tens).evaluate()) - torch.sum(torch.diag(k(Y_tens).evaluate())))
 
-#     return (A + B + C).item(), A.item(), B.item(), C.item()
+     return (A + B + C).item(), A.item(), B.item(), C.item()
 
 
 def mmd(X, Y, k):
@@ -126,21 +126,31 @@ def mmd(X, Y, k):
     n = X.shape[0]
     m = Y.shape[0]
 
-    X_tens = X.clone().detach().requires_grad_(True)
-    Y_tens = Y.clone().detach().requires_grad_(True)
+    if torch.is_tensor(X) and torch.is_tensor(Y):
+        X_tens = X.clone().detach().requires_grad_(True)
+        Y_tens = Y.clone().detach().requires_grad_(True)
                 
-    A = (1 / (n * (n - 1))) * (torch.sum(k(X_tens).evaluate()) - torch.sum(torch.diag(k(X_tens).evaluate())))
-    B = -(2 / (n * m)) * torch.sum(k(X_tens, Y_tens).evaluate())
-    C = (1 / (m * (m - 1))) * (torch.sum(k(Y_tens).evaluate()) - torch.sum(torch.diag(k(Y_tens).evaluate())))
+        A = (1 / (n * (n - 1))) * (torch.sum(k(X_tens).evaluate()) - torch.sum(torch.diag(k(X_tens).evaluate())))
+        B = -(2 / (n * m)) * torch.sum(k(X_tens, Y_tens).evaluate())
+        C = (1 / (m * (m - 1))) * (torch.sum(k(Y_tens).evaluate()) - torch.sum(torch.diag(k(Y_tens).evaluate())))
 
-    Kxy  = k(X_tens, Y_tens).evaluate()
-    Kxx_ = k(X_tens, X_tens).evaluate()
-    Kxx_.fill_diagonal_(0)
+        Kxy  = k(X_tens, Y_tens).evaluate()
+        Kxx_ = k(X_tens, X_tens).evaluate()
+        Kxx_.fill_diagonal_(0)
     
-    Kyy_ = k(Y_tens, Y_tens).evaluate()
-    Kyy_.fill_diagonal_(0)
+        Kyy_ = k(Y_tens, Y_tens).evaluate()
+        Kyy_.fill_diagonal_(0)
 
-    return (A + B + C), Kxx_, Kxy, Kyy_
+        return (A + B + C), Kxx_, Kxy, Kyy_
+    else:
+        X_tens = torch.tensor(X)
+        Y_tens = torch.tensor(Y)
+
+        A = (1 / (n * (n - 1))) * (torch.sum(k(X_tens).evaluate()) - torch.sum(torch.diag(k(X_tens).evaluate())))
+        B = -(2 / (n * m)) * torch.sum(k(X_tens, Y_tens).evaluate())
+        C = (1 / (m * (m - 1))) * (torch.sum(k(Y_tens).evaluate()) - torch.sum(torch.diag(k(Y_tens).evaluate())))
+
+        return (A + B + C).item(), A.item(), B.item(), C.item()
 
 
 
@@ -211,7 +221,7 @@ def mmd_update_batch(x, X, Y, A, B, C, k):
     return current_mmd, A_new, B_new
 
 
-def perm_sampling(P, Q, k, num_perms=200, num_samples=None):
+def perm_sampling(P, Q, k, num_perms=200, eta=1.0):
     """
     Shuffles two datasets together, splits this mix in 2, then calculates MMD to simulate P=Q. Does this num_perms
     number of times.
@@ -219,13 +229,13 @@ def perm_sampling(P, Q, k, num_perms=200, num_samples=None):
     :param Q: Second dataset, array of shape (m, d)
     :param k: GPyTorch kernel
     :param num_perms: Number of permutations done to get range of MMD values.
-    :param num_samples: Number of samples taken in each shuffle. The larger this parameter, the smaller the variance in the estimate. Defaults
+    :param eta: Fraction of samples taken in each shuffle. The larger this parameter, the smaller the variance in the estimate. Defaults
     to 0.5*(n+m)
     :return: Sorted list of MMD values.
     """
     mmds = []
-    if num_samples is None:
-        num_samples = (P.shape[0] + Q.shape[0]) // 2
+    num_samples = int(eta * (P.shape[0] + Q.shape[0]) // 2)
+    
     for _ in trange(num_perms, desc="Permutation sampling"):
         XY = np.concatenate((P, Q)).copy()
         np.random.shuffle(XY)
