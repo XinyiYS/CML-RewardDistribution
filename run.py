@@ -204,8 +204,7 @@ def construct_kernel(args):
 	# indi_feature_extractors = nn.ModuleList([nn.Linear(args['num_features'], min(args['num_features'], 32))
 		# for i in range(args['n_participants']+int(args['include_joint']))])
 	# indi_feature_extractors = nn.Linear(args['num_features'], min(args['num_features'], 128))
-	indi_feature_extractors = nn.ModuleList([nn.Sequential(nn.Linear(args['num_features'], min(args['num_features'], 128) ), nn.Sigmoid(), nn.Linear(min(args['num_features'], 128), min(args['num_features'], 128))) 
-		for i in range(args['n_participants']+int(args['include_joint']))])
+	indi_feature_extractors = nn.Sequential(nn.Linear(args['num_features'], min(args['num_features'], 128) ), nn.Sigmoid(), nn.Linear(min(args['num_features'], 128), min(args['num_features'], 128))) 
 
 	# --------------- Gaussian Process/Kernel module ---------------
 	grid_bounds=(-10., 10.)
