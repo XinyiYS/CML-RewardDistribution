@@ -159,7 +159,7 @@ def objective(args, model, optimizer, trial, train_loaders, test_loaders):
 				loss.backward()
 				optimizer.step()
 
-			if epoch % args['save_interval'] == 0:
+			if (epoch+1) % args['save_interval'] == 0:
 				torch.save(model.state_dict(), oj(args['logdir'], args['kernel_dir'], 'model_-E{}.pth'.format(epoch+1)))
 
 			mmd_dict, tstat_dict = evaluate(model, test_loaders, args, M=50, plot=False)
@@ -203,9 +203,9 @@ def construct_kernel(args):
 	# 1 fully connected layer -> sigmoid -> 1 fully connected layer
 	# indi_feature_extractors = nn.ModuleList([nn.Linear(args['num_features'], min(args['num_features'], 32))
 		# for i in range(args['n_participants']+int(args['include_joint']))])
-	indi_feature_extractors = nn.Linear(args['num_features'], min(args['num_features'], 128))
-	# indi_feature_extractors = nn.ModuleList([nn.Sequential(nn.Linear(args['num_features'], args['num_features']//2), nn.Sigmoid(), nn.Linear(args['num_features']//2, args['num_features'])) 
-		# for i in range(args['n_participants']+int(args['include_joint']))])
+	# indi_feature_extractors = nn.Linear(args['num_features'], min(args['num_features'], 128))
+	indi_feature_extractors = nn.ModuleList([nn.Sequential(nn.Linear(args['num_features'], min(args['num_features'], 128) ), nn.Sigmoid(), nn.Linear(min(args['num_features'], 128), min(args['num_features'], 128))) 
+		for i in range(args['n_participants']+int(args['include_joint']))])
 
 	# --------------- Gaussian Process/Kernel module ---------------
 	grid_bounds=(-10., 10.)
@@ -269,9 +269,9 @@ def train_main(trial):
 	args['num_classes'] = 10
 
 	# ---------- Optuna ----------
-	args['epochs'] = trial.suggest_int("epochs", 10, 100, 5)
+	args['epochs'] = trial.suggest_int("epochs", 10, 100, 10)
 	# args['epochs'] = 0
-	args['batch_size'] = trial.suggest_int("batch_size", 32, 64, 16)
+	args['batch_size'] = trial.suggest_int("batch_size", 256, 1024, 64)
 
 	args['optimizer'] = trial.suggest_categorical("optimizer", ["Adam", "SGD"])
 	args['lr'] = trial.suggest_float("lr", 1e-5, 1e-1, log=True)
