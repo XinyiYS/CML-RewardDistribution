@@ -90,10 +90,9 @@ def split(n_samples, n_participants, train_dataset=None, mode='uniform'):
 		class_sz = 2
 		multiply_by = class_sz * n_participants // len(all_classes)
 		cls_splits = [cls.tolist() for cls in np.array_split(all_classes, np.ceil( 1.0 * len(train_dataset.classes) / class_sz)  )] 
-		print("Using disjoint classes and partitioning the dataset to {} participants with each having {} classes.".format(n_participants, class_sz))
+		print("Using disjoint classes and partitioning the dataset of {} data to {} participants with each having {} classes.".format(len(train_dataset.data), n_participants, class_sz))
 
-		clses = sorted([ cls for _, cls in zip(range(n_participants), repeater(cls_splits)) ])
-
+		clses = sorted([ cls for _, cls in zip(range(n_participants), repeater(cls_splits))])
 		participant_indices = defaultdict(list)
 		for participant_id, classes in enumerate(clses):
 			print("participant id: {} is getting {} classes.".format(participant_id, classes))
@@ -133,7 +132,7 @@ def prepare_loaders(args, repeat=False):
 	from torch.utils.data import DataLoader
 
 	train_loaders = [DataLoader(dataset=train_dataset, batch_size=args['batch_size'], sampler=SubsetRandomSampler(indices)) for indices in train_indices_list]
-	test_loaders = [DataLoader(dataset=train_dataset, batch_size=args['batch_size'], sampler=SubsetRandomSampler(indices)) for indices in test_indices_list]
+	test_loaders = [DataLoader(dataset=test_dataset, batch_size=args['batch_size'], sampler=SubsetRandomSampler(indices)) for indices in test_indices_list]
 
 	import itertools
 	train_indices = list(itertools.chain.from_iterable(train_indices_list))
