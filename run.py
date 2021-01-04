@@ -65,25 +65,21 @@ class DKLModel(gpytorch.Module):
 		super(DKLModel, self).__init__()
 		self.feature_extractor = feature_extractor
 		self.indi_feature_extractors = indi_feature_extractors
+
 		self.gp_layer = gp_layer
 
 	def forward(self, x1, x2, pair, A=None, B=None, C=None):
 		features1 = self.get_vae_features(x1)
 		features2 = self.get_vae_features(x2)
 
-		features1 = self.indi_feature_extractors[pair[0]](features1)
-		features2 = self.indi_feature_extractors[pair[1]](features2)
+		features1 = self.indi_feature_extractors(features1)
+		features2 = self.indi_feature_extractors(features2)
+		
+		# features1 = self.indi_feature_extractors[pair[0]](features1)
+		# features2 = self.indi_feature_extractors[pair[1]](features2)
 		mmd_2, Kxx_, Kxy, Kyy_ = mmd(features1.reshape(len(x1), -1), features2.reshape(len(x2), -1), k=self.gp_layer.covar_module)
 		t_stat = t_statistic(mmd_2, Kxx_, Kxy, Kyy_)
-		# if A is None:
-		# else:
-			# assert A is not None and B is not None and C is not None, "Batch update missing previous pairwise estimates"
-			# mmd_update_batch(x, features1, features2, A, B, C, k)
-		# t_stat = t_statistic(mmd_2, Kxx_, Kxy, Kyy_)
-		
 		return mmd_2, t_stat
-		# return mmd_2, t_stat, self.get_vae_loss(x1) + self.get_vae_loss(x2)
-		# return mmd_2, t_stat, self.gp_layer(self.process_features(features1)), self.gp_layer(self.process_features(features2))
 	
 	def get_vae_features(self, x):
 		if 'CIFAR' in str(self.feature_extractor.__class__):
@@ -93,34 +89,6 @@ class DKLModel(gpytorch.Module):
 
 		return self.feature_extractor.latent_sample(x_mu, x_logvar)
 
-	'''
-	def get_vae_loss(self, x):
-		x_recon, latent_mu, latent_logvar = self.feature_extractor(x)
-		return vae_loss(x_recon, x, latent_mu, latent_logvar)
-
-
-	def get_features(self, x):
-		features = self.feature_extractor(x)
-		features = gpytorch.utils.grid.scale_to_bounds(features, self.grid_bounds[0], self.grid_bounds[1])
-		# This next line makes it so that we learn a GP for each feature
-		features = features.transpose(-1, -2).unsqueeze(-1)
-		return features
-	
-	def process_features(self, features):
-		features = gpytorch.utils.grid.scale_to_bounds(features, self.grid_bounds[0], self.grid_bounds[1])
-		# This next line makes it so that we learn a GP for each feature
-		features = features.transpose(-1, -2).unsqueeze(-1)
-		return  features
-	
-	def forward(self, x1, x2):        
-		features1 = self.get_features(x1)
-		features2 = self.get_features(x2)   
-		mmd_2, Kxx_, Kxy, Kyy_ = mmd(features1.reshape(len(x1), -1), features2.reshape(len(x2), -1), k=self.gp_layer.covar_module)
-		t_stat = t_statistic(mmd_2, Kxx_, Kxy, Kyy_)        
-		return mmd_2, t_stat, self.gp_layer(features1), self.gp_layer(features2)
-	'''
-
-# need a kernel collectively defined by gpytorch and a DNN
 def objective(args, model, optimizer, trial, train_loaders, test_loaders):
 
 	N = args['n_participants'] + int(args['include_joint'])
@@ -139,10 +107,22 @@ def objective(args, model, optimizer, trial, train_loaders, test_loaders):
 			
 				mmd_losses = torch.zeros(N, device=data[0][0].device, requires_grad=False)
 				for (i, j) in pairs:
-					mmd_2, t_stat = model(data[i][0], data[j][0], pair=[i,j])
+
+					if i != j:
+						X, Y = data[i][0], data[j][0]
+					else:
+						size = len(data[i][0])
+						temp = data[i][0]
+						rand_inds =  torch.randperm(size)
+						X, Y = temp[rand_inds[:size//2]], temp[rand_inds[size//2:]]
+
+					if X.size(0) < 4 or Y.size(0) < 4: continue
+					# Too small a batch leftover, would cause the t-statistic to be undefined, so skip
+
+					mmd_hat, t_stat = model(X, Y, pair=[i, j])
 					if torch.isnan(t_stat):
 						print("t_stat is nan for {} vs {}, at {}-epoch".format(i, j, epoch+1))						
-						obj = mmd_2
+						obj = mmd_hat
 					else:
 						obj = t_stat
 
@@ -155,10 +135,10 @@ def objective(args, model, optimizer, trial, train_loaders, test_loaders):
 				loss.backward()
 				optimizer.step()
 
-			if epoch % args['save_interval'] == 0:
+			if (epoch+1) % args['save_interval'] == 0:
 				torch.save(model.state_dict(), oj(args['logdir'], args['kernel_dir'], 'model_-E{}.pth'.format(epoch+1)))
 
-			mmd_dict, tstat_dict = evaluate(model, test_loaders, args, M=50, plot=False)
+			mmd_dict, tstat_dict = evaluate(model, test_loaders, args, plot=False)
 			
 			# --------------- Objective ---------------
 			# small intra mmd, large inter mmd
@@ -197,10 +177,10 @@ def construct_kernel(args):
 
 	# Individual MLP feature extractors for each participant
 	# 1 fully connected layer -> sigmoid -> 1 fully connected layer
-	indi_feature_extractors = nn.ModuleList([nn.Linear(args['num_features'], min(args['num_features'], 32))
-		for i in range(args['n_participants']+int(args['include_joint']))])
-	# indi_feature_extractors = nn.ModuleList([nn.Sequential(nn.Linear(args['num_features'], args['num_features']//2), nn.Sigmoid(), nn.Linear(args['num_features']//2, args['num_features'])) 
+	# indi_feature_extractors = nn.ModuleList([nn.Linear(args['num_features'], min(args['num_features'], 32))
 		# for i in range(args['n_participants']+int(args['include_joint']))])
+	# indi_feature_extractors = nn.Linear(args['num_features'], min(args['num_features'], 128))
+	indi_feature_extractors = nn.Sequential(nn.Linear(args['num_features'], min(args['num_features'], 128) ), nn.Sigmoid(), nn.Linear(min(args['num_features'], 128), min(args['num_features'], 128))) 
 
 	# --------------- Gaussian Process/Kernel module ---------------
 	grid_bounds=(-10., 10.)
@@ -264,9 +244,9 @@ def train_main(trial):
 	args['num_classes'] = 10
 
 	# ---------- Optuna ----------
-	args['epochs'] = trial.suggest_int("epochs", 10, 100, 5)
+	args['epochs'] = trial.suggest_int("epochs", 10, 100, 10)
 	# args['epochs'] = 0
-	args['batch_size'] = trial.suggest_int("batch_size", 32, 64, 16)
+	args['batch_size'] = trial.suggest_int("batch_size", 256, 1024, 64)
 
 	args['optimizer'] = trial.suggest_categorical("optimizer", ["Adam", "SGD"])
 	args['lr'] = trial.suggest_float("lr", 1e-5, 1e-1, log=True)
@@ -279,9 +259,6 @@ def train_main(trial):
 	args['kernel_dir'] = 'trained_kernels'
 	args['figs_dir'] = 'figs'
 	args['save_interval'] = 25
-
-	# args['train'] = True # if False, load the model from <experiment_dir> for evaluation
-	# args['experiment_dir'] = 'logs/Experiment_2020-12-16-19-28'
 
 	# --------------- Create and Load Model ---------------
 

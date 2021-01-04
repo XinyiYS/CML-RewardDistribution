@@ -90,10 +90,9 @@ def split(n_samples, n_participants, train_dataset=None, mode='uniform'):
 		class_sz = 2
 		multiply_by = class_sz * n_participants // len(all_classes)
 		cls_splits = [cls.tolist() for cls in np.array_split(all_classes, np.ceil( 1.0 * len(train_dataset.classes) / class_sz)  )] 
-		print("Using disjoint classes and partitioning the dataset to {} participants with each having {} classes.".format(n_participants, class_sz))
+		print("Using disjoint classes and partitioning the dataset of {} data to {} participants with each having {} classes.".format(len(train_dataset.data), n_participants, class_sz))
 
-		clses = sorted([ cls for _, cls in zip(range(n_participants), repeater(cls_splits)) ])
-
+		clses = sorted([ cls for _, cls in zip(range(n_participants), repeater(cls_splits))])
 		participant_indices = defaultdict(list)
 		for participant_id, classes in enumerate(clses):
 			print("participant id: {} is getting {} classes.".format(participant_id, classes))
@@ -116,7 +115,6 @@ def split(n_samples, n_participants, train_dataset=None, mode='uniform'):
 	return train_indices
 
 
-
 def prepare_loaders(args, repeat=False):
 
 	train_dataset, test_dataset = load_dataset(args=args)
@@ -134,7 +132,7 @@ def prepare_loaders(args, repeat=False):
 	from torch.utils.data import DataLoader
 
 	train_loaders = [DataLoader(dataset=train_dataset, batch_size=args['batch_size'], sampler=SubsetRandomSampler(indices)) for indices in train_indices_list]
-	test_loaders = [DataLoader(dataset=train_dataset, batch_size=args['batch_size'], sampler=SubsetRandomSampler(indices)) for indices in test_indices_list]
+	test_loaders = [DataLoader(dataset=test_dataset, batch_size=args['batch_size'], sampler=SubsetRandomSampler(indices)) for indices in test_indices_list]
 
 	import itertools
 	train_indices = list(itertools.chain.from_iterable(train_indices_list))
@@ -209,6 +207,32 @@ def evaluate(model, test_loaders, args, M=50, plot=False, logdir=None, figs_dir=
 			for i in range(len(data)):
 				data[i][0], data[i][1] = data[i][0].cuda(), data[i][1].cuda()    					
 
+
+			for (i,j) in pairs:
+
+				if i != j:
+					X, Y = data[i][0], data[j][0]
+				else:
+					size = len(data[i][0])
+					temp = data[i][0]
+					rand_inds =  torch.randperm(size)
+					X, Y = temp[rand_inds[:size//2]], temp[rand_inds[size//2:]]
+
+				if X.size(0) < 4 or Y.size(0) < 4:
+					'''
+					To small a batch leftover, would cause the t-statistic to be undefined
+					So skip
+					print(data[i][0].shape, data[j][0].shape)
+					'''
+					continue
+
+				mmd_hat, t_stat = model(X, Y, pair=[i, j])
+				mmd_dict[str(i)+'-'+str(j)].append(mmd_hat.tolist())
+				tstat_dict[str(i)+'-'+str(j)].append(t_stat.tolist())
+
+
+
+			''' No need for permutation in evaluation
 			for m in range(M):
 				for (i,j) in pairs:
 					if i != j:
@@ -223,6 +247,7 @@ def evaluate(model, test_loaders, args, M=50, plot=False, logdir=None, figs_dir=
 
 					mmd_dict[str(i)+'-'+str(j)].append(mmd_hat.tolist())
 					tstat_dict[str(i)+'-'+str(j)].append(t_stat.tolist())
+			'''
 
 	if not plot: 
 		return mmd_dict, tstat_dict
@@ -531,5 +556,5 @@ def write_model(model, logdir, args):
 
 def load_kernel(model, kernel_dir='trained_kernels', latest=True):
 	max_E = max([int(kernel[kernel.find('E')+1: kernel.find('.pth')]) for kernel in os.listdir(kernel_dir)])
-	model.load_state_dict(torch.load(oj(kernel_dir, 'model_-E{}.pth'.format(str(max_E)))))
+	model.load_state_dict(torch.load(oj(kernel_dir, 'model_-E{}.pth'.format(str(max_E)))), strict=False)
 	return model

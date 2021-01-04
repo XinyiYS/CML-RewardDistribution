@@ -94,7 +94,7 @@ def load_pretrain(vae=None, path='CIFAR10_CVAE/model_-E800.pth'):
     except Exception as e:
         print(e)
         directory = 'CIFAR10_CVAE'
-        filename = 'model_-E800.pth' #'vae_2d.pth'
+        filename = 'model_512d.pth' #'vae_2d.pth'
         # if not os.path.isdir(directory):
         #     os.makedirs(directory)
         # print('downloading pretrained model ...')
