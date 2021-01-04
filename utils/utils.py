@@ -207,6 +207,32 @@ def evaluate(model, test_loaders, args, M=50, plot=False, logdir=None, figs_dir=
 			for i in range(len(data)):
 				data[i][0], data[i][1] = data[i][0].cuda(), data[i][1].cuda()    					
 
+
+			for (i,j) in pairs:
+
+				if i != j:
+					X, Y = data[i][0], data[j][0]
+				else:
+					size = len(data[i][0])
+					temp = data[i][0]
+					rand_inds =  torch.randperm(size)
+					X, Y = temp[rand_inds[:size//2]], temp[rand_inds[size//2:]]
+
+				if X.size(0) < 4 or Y.size(0) < 4:
+					'''
+					To small a batch leftover, would cause the t-statistic to be undefined
+					So skip
+					print(data[i][0].shape, data[j][0].shape)
+					'''
+					continue
+
+				mmd_hat, t_stat = model(X, Y, pair=[i, j])
+				mmd_dict[str(i)+'-'+str(j)].append(mmd_hat.tolist())
+				tstat_dict[str(i)+'-'+str(j)].append(t_stat.tolist())
+
+
+
+			''' No need for permutation in evaluation
 			for m in range(M):
 				for (i,j) in pairs:
 					if i != j:
@@ -221,6 +247,7 @@ def evaluate(model, test_loaders, args, M=50, plot=False, logdir=None, figs_dir=
 
 					mmd_dict[str(i)+'-'+str(j)].append(mmd_hat.tolist())
 					tstat_dict[str(i)+'-'+str(j)].append(t_stat.tolist())
+			'''
 
 	if not plot: 
 		return mmd_dict, tstat_dict

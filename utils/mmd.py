@@ -46,6 +46,8 @@ def t_statistic(mmd_2, Kxx_, Kxy, Kyy_):
 
     """
     m = Kxx_.size(0)
+    assert m >= 4, "The size of the Kxx_ currently: <{}> must be larger than or equal to 4 to avoid factorial of negative values.".format(m)
+
     ex = torch.ones(Kxx_.size(0), device = Kxx_.device)
     ey = torch.ones(Kyy_.size(0), device = Kyy_.device)
 
@@ -178,8 +180,7 @@ def mmd_update(x, X, Y, A, B, C, k):
 
 def mmd_update_batch(x, X, Y, A, B, C, k):
     """
-    Calculates unbiased MMD^2 when we add a single point to a set with an already calculated MMD. Calculates this
-    for a batch of points. Updating one point like this takes linear time instead of quadratic time by naively 
+    Calculates unbiased MMD^2 when we add a batch of points to a set with an already calculated MMD. Updating one point like this takes linear time instead of quadratic time by naively 
     redoing the entire calculation. Does not return C because it stays the same throughout.
     :param x: vector of shape (z, d)
     :param X: array of shape (n, d)
