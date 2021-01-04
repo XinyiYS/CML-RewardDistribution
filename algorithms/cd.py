@@ -116,7 +116,7 @@ def process_func(params):
         return weighted_sampling(candidates, D_i, mu, Y, kernel, greed)
 
 
-def con_div(candidates, Y, phi, D, kernel, num_perms=100, greeds=None, eta=None):
+def con_div(candidates, Y, phi, D, kernel, perm_samp_dataset, num_perms=100, greeds=None, eta=None):
     """
     Controlled divergence algorithm. Defaults to pure greedy algorithm
     :param candidates: Candidate points from generator distribution, one for each party. array of shape (k, m, d)
@@ -124,10 +124,12 @@ def con_div(candidates, Y, phi, D, kernel, num_perms=100, greeds=None, eta=None)
     :param phi: reward vector of values in [0, 1]. array of shape (k)
     :param D: Parties data. array of shape (k, n, d)
     :param kernel: kernel to measure MMD
+    :param perm_samp_data: all data to use for permutation sampling
+    :param num_perms: int, number of permutations to sample
     :param greeds: list of floats in range [0, inf) of size (k). 0 corresponds to pure random sampling, inf
     corresponds to pure greedy. Leave as None to set all to pure greedy. Set individual values to -1 for pure greedy
     for specific parties
-    :param eta: fraction of samples used to calculate MMD each time in permutation sampling. The higher this is, 
+    :param eta: float, fraction of samples used to calculate MMD each time in permutation sampling. The higher this is,
     the smaller the variance of the estimate
     """
     k = D.shape[0]
@@ -135,7 +137,7 @@ def con_div(candidates, Y, phi, D, kernel, num_perms=100, greeds=None, eta=None)
         greeds = [-1] * k
 
     # Work with negative mmds from here on, so larger is better
-    null_neg_mmds = sorted([-val for val in perm_sampling(np.concatenate(D), Y, kernel, num_perms, eta)])
+    null_neg_mmds = sorted([-val for val in perm_sampling(perm_samp_dataset, Y, kernel, num_perms, eta)])
 
     # Remove estimates above 0 as they are unlikely to be reached without an extremely large number of candidates
     for i in range(len(null_neg_mmds)):
