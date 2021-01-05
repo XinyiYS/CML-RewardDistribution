@@ -61,10 +61,10 @@ class GaussianProcessLayer(gpytorch.models.ApproximateGP):
 		return gpytorch.distributions.MultivariateNormal(mean, covar)
 
 class DKLModel(gpytorch.Module):
-	def __init__(self, feature_extractor, indi_feature_extractors, gp_layer, num_dim=10, grid_bounds=(-10., 10.)):
+	def __init__(self, feature_extractor, MLP_feature_extractor, gp_layer, num_dim=10, grid_bounds=(-10., 10.)):
 		super(DKLModel, self).__init__()
 		self.feature_extractor = feature_extractor
-		self.indi_feature_extractors = indi_feature_extractors
+		self.MLP_feature_extractor = MLP_feature_extractor
 
 		self.gp_layer = gp_layer
 
@@ -72,8 +72,8 @@ class DKLModel(gpytorch.Module):
 		features1 = self.get_vae_features(x1)
 		features2 = self.get_vae_features(x2)
 
-		features1 = self.indi_feature_extractors(features1)
-		features2 = self.indi_feature_extractors(features2)
+		features1 = self.MLP_feature_extractor(features1)
+		features2 = self.MLP_feature_extractor(features2)
 		
 		# features1 = self.indi_feature_extractors[pair[0]](features1)
 		# features2 = self.indi_feature_extractors[pair[1]](features2)
@@ -93,10 +93,10 @@ def objective(args, model, optimizer, trial, train_loaders, test_loaders):
 
 	N = args['n_participants'] + int(args['include_joint'])
 	pairs = list(product(range(N), range(N)))
+	torch.save(model.state_dict(), oj(args['logdir'], args['kernel_dir'], 'model_-E{}.pth'.format(0)))
 	with gpytorch.settings.num_likelihood_samples(8):
 		for epoch in range(args['epochs']):
 			model.train()
-
 			for batch_id, data in enumerate(zip(*train_loaders)):
 				# data is of length 5 [(data1, target1)... (data5, target5)]
 				data = list(data)
@@ -153,6 +153,8 @@ def objective(args, model, optimizer, trial, train_loaders, test_loaders):
 			# Handle pruning based on the intermediate value.
 			if trial.should_prune():
 				raise optuna.exceptions.TrialPruned()
+
+		torch.save(model.state_dict(), oj(args['logdir'], args['kernel_dir'], 'model_-E{}.pth'.format(args['epochs'])))
 	return obj
 
 
@@ -175,23 +177,25 @@ def construct_kernel(args):
 
 	# --------------- Individual layers after the Shared Feature extractor module ---------------
 
-	# Individual MLP feature extractors for each participant
-	# 1 fully connected layer -> sigmoid -> 1 fully connected layer
-	# indi_feature_extractors = nn.ModuleList([nn.Linear(args['num_features'], min(args['num_features'], 32))
-		# for i in range(args['n_participants']+int(args['include_joint']))])
-	# indi_feature_extractors = nn.Linear(args['num_features'], min(args['num_features'], 128))
-	indi_feature_extractors = nn.Sequential(nn.Linear(args['num_features'], min(args['num_features'], 128) ), nn.Sigmoid(), nn.Linear(min(args['num_features'], 128), min(args['num_features'], 128))) 
+	# MLP feature extractor on top of the VAEs
+	from models.feature_extractors import MLP
+	MLP_feature_extractor = MLP(args)
 
 	# --------------- Gaussian Process/Kernel module ---------------
 	grid_bounds=(-10., 10.)
-	suggested_kernels = [getattr(gpytorch.kernels, base_kernel)(lengthscale_prior=gpytorch.priors.SmoothedBoxPrior(
+
+	# Should be the dimension of the output of the last layer of the feature extractor
+	(last_layer_index, last_layer) = list(MLP_feature_extractor._modules.items())[-1]
+	ard_num_dims = int(last_layer.out_features) if args['ard_num_dims'] else None
+
+	suggested_kernels = [getattr(gpytorch.kernels, base_kernel)(ard_num_dims=ard_num_dims,lengthscale_prior=gpytorch.priors.SmoothedBoxPrior(
 					math.exp(-1), math.exp(1), sigma=0.1, transform=torch.exp)) for base_kernel in args['base_kernels'] ]
 	covar_module = ScaleKernel(AdditiveKernel(*suggested_kernels))
 	gp_layer = GaussianProcessLayer(covar_module=covar_module, num_dim=args['num_features'], grid_bounds=grid_bounds)
 
 
 	# --------------- Complete Deep Kernel ---------------
-	model = DKLModel(feature_extractor, indi_feature_extractors, gp_layer)
+	model = DKLModel(feature_extractor, MLP_feature_extractor, gp_layer)
 
 	if torch.cuda.is_available():
 		model = model.cuda()
@@ -200,7 +204,7 @@ def construct_kernel(args):
 	# ---------- Optimizer and Scheduler ----------
 	optimizer = getattr(optim, args['optimizer'])([
 		{'params': model.feature_extractor.parameters(), 'lr': args['lr'] * 1e-2, 'weight_decay': 1e-4},
-		{'params': model.indi_feature_extractors.parameters(),  'lr': args['lr'], 'weight_decay': 1e-4},
+		{'params': model.MLP_feature_extractor.parameters(),  'lr': args['lr'], 'weight_decay': 1e-4},
 		{'params': model.gp_layer.hyperparameters(), 'lr': args['lr'] * 0.1, 'weight_decay':1e-4},
 		{'params': model.gp_layer.variational_parameters(), 'weight_decay':1e-4},
 	], lr=args['lr'], weight_decay=0)
@@ -227,7 +231,7 @@ def train_main(trial):
 
 	args['include_joint'] = True
 
-	args['dataset'] = 'MNIST'
+	args['dataset'] = 'CIFAR10'
 	# ---------- Feature extractor and latent dim setting ----------
 
 	args['num_features'] = 512 if args['dataset'] == 'CIFAR10' else 10 # latent_dims
@@ -239,6 +243,9 @@ def train_main(trial):
 	# number of channels, 1 for MNIST, 3 for CIFAR-10, CIFAR-100	
 	args['num_channels'] = 3 if args['dataset'] == 'CIFAR10' else 1
 	args['image_size'] = 32 if args['dataset'] == 'CIFAR10' else 28
+
+	# learning the lengscale hyperparameters individually for each dimension
+	args['ard_num_dims'] = True if args['dataset'] == 'CIFAR10' else False
 
 	# fixed for MNIST and CIFAR10
 	args['num_classes'] = 10
