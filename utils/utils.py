@@ -87,7 +87,8 @@ def split(n_samples, n_participants, train_dataset=None, mode='uniform'):
 		mean_size = n_samples // n_participants
 
 		# random.seed(1234)
-		class_sz = 2
+		class_sz = max(10 // n_participants, 1)
+
 		multiply_by = class_sz * n_participants // len(all_classes)
 		cls_splits = [cls.tolist() for cls in np.array_split(all_classes, np.ceil( 1.0 * len(train_dataset.classes) / class_sz)  )] 
 		print("Using disjoint classes and partitioning the dataset of {} data to {} participants with each having {} classes.".format(len(train_dataset.data), n_participants, class_sz))
