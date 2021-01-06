@@ -2,6 +2,22 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+def MLP(args):
+	if args['dataset'] == 'CIFAR10':
+		return nn.Sequential(
+			nn.Linear(args['num_features'], 256), 
+			nn.Sigmoid(),
+			nn.Linear(256, 128),
+			nn.Sigmoid(),
+			nn.Linear(128, 32)) 
+
+	if args['dataset'] == 'MNIST':
+		return nn.Sequential(
+			nn.Linear(args['num_features'], args['num_features']), 
+			nn.Sigmoid(), 
+			nn.Linear(args['num_features'], args['num_features'])) 
+
+'''
 class CNN_MNIST(nn.Module):
 	def __init__(self, ngpu=1, nc=1, ndf=64, in_dim=784, out_dim=2, device=None):
 		super(CNN_MNIST, self).__init__()
@@ -53,3 +69,4 @@ class MLP_MNIST(nn.Module):
 		x = self.fc4(x)
 		return x
 		# return F.log_softmax(x, dim=1)
+'''

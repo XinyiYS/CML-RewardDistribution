@@ -87,19 +87,11 @@ def vae_loss(recon_x, x, mu, logvar, variational_beta = 10):
     return recon_loss + variational_beta * kldivergence
 
 def load_pretrain(vae=None, path='CIFAR10_CVAE/model_-E800.pth'):
-    vae = vae or VariationalAutoencoder()
+    vae = vae or CIFAR_CVAE()
     try:
-        vae.load_state_dict(torch.load(path))
+        vae.load_state_dict(torch.load(path), strict=False)
         print("Pretrained CIFAR10 CVAE model <{}> loaded".format(path))
     except Exception as e:
         print(e)
-        directory = 'CIFAR10_CVAE'
-        filename = 'model_512d.pth' #'vae_2d.pth'
-        # if not os.path.isdir(directory):
-        #     os.makedirs(directory)
-        # print('downloading pretrained model ...')
-        # urllib.request.urlretrieve ("http://geometry.cs.ucl.ac.uk/creativeai/pretrained/"+filename, os.path.join(directory, filename))
-        # vae.load_state_dict(torch.load( os.path.join(directory,filename)))
-        # print("Pretrained MNIST CVAE model <{}> loaded".format(filename))
         print("Pretrained CIFAR10 CVAE model not found. Loading unsuccessful.")
     return vae
