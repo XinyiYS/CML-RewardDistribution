@@ -226,6 +226,7 @@ def train_main(trial):
 
 	n_participants = args['n_participants'] = 5
 	args['n_samples_per_participant'] = 2000
+	args['class_sz_per_participant'] = 1
 	args['n_samples'] = args['n_participants'] * args['n_samples_per_participant']
 	args['split_mode'] = "disjointclasses" #@param ["disjointclasses","uniform"," classimbalance", "powerlaw"]
 

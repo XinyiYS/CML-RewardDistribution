@@ -20,7 +20,7 @@ def init_deterministic(seed=1234):
 	torch.backends.cudnn.benchmark = False
 	random.seed(seed)
 
-def split(n_samples, n_participants, train_dataset=None, mode='uniform'):
+def split(n_samples, n_participants, train_dataset=None, mode='uniform', class_sz=None):
 	'''
 	Args:
 	n_samples: total samples to be split among all participants
@@ -87,7 +87,7 @@ def split(n_samples, n_participants, train_dataset=None, mode='uniform'):
 		mean_size = n_samples // n_participants
 
 		# random.seed(1234)
-		class_sz = max(10 // n_participants, 1)
+		class_sz = class_sz or max(10 // n_participants, 1)
 
 		multiply_by = class_sz * n_participants // len(all_classes)
 		cls_splits = [cls.tolist() for cls in np.array_split(all_classes, np.ceil( 1.0 * len(train_dataset.classes) / class_sz)  )] 
@@ -119,8 +119,8 @@ def split(n_samples, n_participants, train_dataset=None, mode='uniform'):
 def prepare_loaders(args, repeat=False):
 
 	train_dataset, test_dataset = load_dataset(args=args)
-	train_indices_list = split(args['n_samples'], args['n_participants'], train_dataset=train_dataset, mode=args['split_mode'])
-	test_indices_list = split(len(test_dataset.data), args['n_participants'], train_dataset=test_dataset, mode=args['split_mode'])
+	train_indices_list = split(args['n_samples'], args['n_participants'], train_dataset=train_dataset, mode=args['split_mode'], class_sz = args['class_sz_per_participant'])
+	test_indices_list = split(len(test_dataset.data), args['n_participants'], train_dataset=test_dataset, mode=args['split_mode'], class_sz = args['class_sz_per_participant'])
 
 	shuffle = True
 	if shuffle:
