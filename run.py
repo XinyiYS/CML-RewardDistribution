@@ -208,7 +208,7 @@ def construct_kernel(args):
 		{'params': model.gp_layer.hyperparameters(), 'lr': args['lr'] * 0.1, 'weight_decay':1e-4},
 		{'params': model.gp_layer.variational_parameters(), 'weight_decay':1e-4},
 	], lr=args['lr'], weight_decay=0)
-	scheduler = MultiStepLR(optimizer, milestones=[0.5 * args['epochs'], 0.75 * args['epochs']], gamma=0.1)
+	scheduler = MultiStepLR(optimizer, milestones=[0.5 * args['epochs'], 0.75 * args['epochs']], gamma=0.95)
 
 	args['lr_scheduler'] = scheduler.__class__
 	args['model'] = model.__class__
