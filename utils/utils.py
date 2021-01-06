@@ -119,8 +119,12 @@ def split(n_samples, n_participants, train_dataset=None, mode='uniform', class_s
 def prepare_loaders(args, repeat=False):
 
 	train_dataset, test_dataset = load_dataset(args=args)
-	train_indices_list = split(args['n_samples'], args['n_participants'], train_dataset=train_dataset, mode=args['split_mode'], class_sz = args['class_sz_per_participant'])
-	test_indices_list = split(len(test_dataset.data), args['n_participants'], train_dataset=test_dataset, mode=args['split_mode'], class_sz = args['class_sz_per_participant'])
+	if 'class_sz_per_participant' in args:
+		class_sz = args['args']
+	else:
+		class_sz = 2
+	train_indices_list = split(args['n_samples'], args['n_participants'], train_dataset=train_dataset, mode=args['split_mode'], class_sz = class_sz)
+	test_indices_list = split(len(test_dataset.data), args['n_participants'], train_dataset=test_dataset, mode=args['split_mode'], class_sz = class_sz)
 
 	shuffle = True
 	if shuffle:
@@ -178,7 +182,7 @@ def tabulate_dict(pairwise_dict, N):
 
 
 
-def evaluate(model, test_loaders, args, M=50, plot=False, logdir=None, figs_dir=None):
+def evaluate(model, test_loaders, args, M=50, plot=False, logdir=None, figs_dir=None, alpha=1e4):
 	'''
 	Arguments:
 		model: trained kernel, takes two inputs of the same shape
@@ -272,7 +276,7 @@ def evaluate(model, test_loaders, args, M=50, plot=False, logdir=None, figs_dir=
 	for i in range(N):
 		for j in range(N):
 			pair = str(i)+'-'+str(j)
-			mmd_values = np.asarray(mmd_dict[pair])*1e4 
+			mmd_values = np.asarray(mmd_dict[pair])*alpha
 			sns.kdeplot(mmd_values, label=pair)
 
 		plt.title('{} vs others MMD values'.format(str(i)))
@@ -292,7 +296,7 @@ def evaluate(model, test_loaders, args, M=50, plot=False, logdir=None, figs_dir=
 		for j in range(N):
 			pair = str(i)+'-'+str(j)
 
-			tstat_values = np.asarray(tstat_dict[pair])*1e3
+			tstat_values = np.asarray(tstat_dict[pair])*alpha // 10
 			sns.kdeplot(tstat_values, label=pair)
 
 		plt.title('{} vs others tstats values'.format(str(i)))
@@ -555,7 +559,17 @@ def write_model(model, logdir, args):
 		sys.stdout = original_stdout # Reset the standard output to its original value
 	return
 
-def load_kernel(model, kernel_dir='trained_kernels', latest=True):
+def load_kernel(model, kernel_dir='trained_kernels', epoch=None):
+
+	if epoch is not None:
+		try:
+			model.load_state_dict(torch.load(oj(kernel_dir, 'model_-E{}.pth'.format(str(epoch)))), strict=False)
+			return model
+		except Exception as e:
+			print(e)
+			print("Loading the latest weights.")
+
 	max_E = max([int(kernel[kernel.find('E')+1: kernel.find('.pth')]) for kernel in os.listdir(kernel_dir)])
 	model.load_state_dict(torch.load(oj(kernel_dir, 'model_-E{}.pth'.format(str(max_E)))), strict=False)
+
 	return model

@@ -293,7 +293,20 @@ def train_main(trial):
 	obj_value = objective(args, model, optimizer, trial, train_loaders, test_loaders)
 
 	# --------------- Evaluating Performance ---------------
-	evaluate(model, test_loaders, args, M=50, plot=True)
+	mmd_dict, tstat_dict = evaluate(model, test_loaders, args, plot=True)
+
+	mmd_mean_table, mmd_std_table = tabulate_dict(mmd_dict, args['n_participants'] + int(args['include_joint']))
+	
+	print("Pairwise MMD hat values mean: ")
+	print(mmd_mean_table)
+	print("Pairwise MMD hat values std: ")
+	print(mmd_std_table)
+
+	tstat_mean_table, tstat_std_table = tabulate_dict(tstat_dict, args['n_participants'] + int(args['include_joint']))
+	print("Pairwise tStatitics mean: ")
+	print(tstat_mean_table)
+	print("Pairwise tStatitic std: ")
+	print(tstat_std_table)
 
 	return obj_value
 
