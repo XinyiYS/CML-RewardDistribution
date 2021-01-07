@@ -25,7 +25,7 @@ def falling_fac(n, b):
     """
     return fac(n) // fac(n-b)
 
-def t_statistic(mmd_2, Kxx_, Kxy, Kyy_):
+def t_statistic(mmd_2, Kxx_, Kxy, Kyy_, _eps=1e-8):
     
     """
     Calculates the t-statistic estimator according to "Generative models and model criticism via optimized maximum mean discrepancy by Sutherland et al 2017 ICLR"
@@ -42,6 +42,7 @@ def t_statistic(mmd_2, Kxx_, Kxy, Kyy_):
     :param Kxx_: matrix of shape (m, m)
     :param Kxy:  matrix of shape (m, n)
     :param Kyy_: matrix of shape (n, n)
+    :_eps: a small constant in case vhat is negative and cannot be taken square root
     :return: t-statistic estimate
 
     """
@@ -93,7 +94,7 @@ def t_statistic(mmd_2, Kxx_, Kxy, Kyy_):
     a = torch.square(norm(Kxy, ord='fro'))
     vhat += constant * a
 
-    return torch.div(mmd_2, torch.sqrt(vhat))
+    return torch.div(mmd_2, torch.sqrt(torch.max(vhat, torch.tensor(_eps, device=vhat.device))))
 
 # def mmd(X, Y, k):
 #     """
