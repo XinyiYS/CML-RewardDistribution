@@ -20,7 +20,7 @@ def init_deterministic(seed=1234):
 	torch.backends.cudnn.benchmark = False
 	random.seed(seed)
 
-def split(n_samples, n_participants, train_dataset=None, mode='uniform', class_sz=None):
+def split(n_samples, n_participants, train_dataset=None, mode='uniform', class_sz=None, clses=None):
 	'''
 	Args:
 	n_samples: total samples to be split among all participants
@@ -81,19 +81,26 @@ def split(n_samples, n_participants, train_dataset=None, mode='uniform', class_s
 
 		# each participant has some number partitioned classes of randomly selected examples
 		# Works for a 5-participant case for MNIST or CIFAR10
+
+
 		all_classes = np.arange(len(train_dataset.classes))
 		data_indices = [torch.nonzero(train_dataset.targets == class_id).view(-1).tolist() for class_id in all_classes]
-
 		mean_size = n_samples // n_participants
 
-		# random.seed(1234)
-		class_sz = class_sz or max(10 // n_participants, 1)
+		if clses:
+			print("Using disjoint classes with custom selected classes:", clses)
+			class_sz = 1
+		else:
+			# random.seed(1234)
+			class_sz = class_sz or max(10 // n_participants, 1)
 
-		multiply_by = class_sz * n_participants // len(all_classes)
-		cls_splits = [cls.tolist() for cls in np.array_split(all_classes, np.ceil( 1.0 * len(train_dataset.classes) / class_sz)  )] 
-		print("Using disjoint classes and partitioning the dataset of {} data to {} participants with each having {} classes.".format(len(train_dataset.data), n_participants, class_sz))
+			multiply_by = class_sz * n_participants // len(all_classes)
+			cls_splits = [cls.tolist() for cls in np.array_split(all_classes, np.ceil( 1.0 * len(train_dataset.classes) / class_sz)  )] 
+			print("Using disjoint classes and partitioning the dataset of {} data to {} participants with each having {} classes.".format(len(train_dataset.data), n_participants, class_sz))
 
-		clses = sorted([ cls for _, cls in zip(range(n_participants), repeater(cls_splits))])
+			clses = sorted([ cls for _, cls in zip(range(n_participants), repeater(cls_splits))])
+		
+
 		participant_indices = defaultdict(list)
 		for participant_id, classes in enumerate(clses):
 			print("participant id: {} is getting {} classes.".format(participant_id, classes))
@@ -120,11 +127,12 @@ def prepare_loaders(args, repeat=False):
 
 	train_dataset, test_dataset = load_dataset(args=args)
 	if 'class_sz_per_participant' in args:
-		class_sz = args['args']
+		class_sz = args['class_sz_per_participant']
 	else:
 		class_sz = 2
-	train_indices_list = split(args['n_samples'], args['n_participants'], train_dataset=train_dataset, mode=args['split_mode'], class_sz = class_sz)
-	test_indices_list = split(len(test_dataset.data), args['n_participants'], train_dataset=test_dataset, mode=args['split_mode'], class_sz = class_sz)
+	clses = None if 'clses' not in args else args['clses']
+	train_indices_list = split(args['n_samples'], args['n_participants'], train_dataset=train_dataset, mode=args['split_mode'], class_sz = class_sz, clses=clses)
+	test_indices_list = split(len(test_dataset.data), args['n_participants'], train_dataset=test_dataset, mode=args['split_mode'], class_sz = class_sz, clses=clses)
 
 	shuffle = True
 	if shuffle:
