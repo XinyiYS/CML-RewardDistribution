@@ -408,7 +408,6 @@ def load_dataset(args):
 		
 		train_dataset = FastCIFAR10('.data/cifar', train=True, download=True)
 		test_dataset = FastCIFAR10('.data/cifar', train=False, download=True)
-		print(train_dataset.data.shape)
 
 		# transform_train = transforms.Compose([
 		# 		transforms.RandomCrop(32, padding=4),
