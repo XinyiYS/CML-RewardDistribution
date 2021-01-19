@@ -106,7 +106,7 @@ def process_func(params):
     :param params: (D, D[i], Y, kernel, null_mmds, phi, candidates)
     :return: List of rewards
     """
-    D, D_i, Y, kernel, null_neg_mmds, phi, candidates, greed = params
+    D_i, Y, kernel, null_neg_mmds, phi, candidates, greed = params
 
     mu = null_neg_mmds[math.ceil(phi * (len(null_neg_mmds) - 1))]  # Get negative MMD at quantile of reward vector
     
@@ -146,7 +146,7 @@ def con_div(candidates, Y, phi, D, kernel, perm_samp_dataset, num_perms=100, gre
     null_neg_mmds = null_neg_mmds[:i]
 
     # Construct params list
-    params = [(D, D[i], Y, kernel, null_neg_mmds, phi[i], candidates[i], greeds[i]) for i in range(k)]
+    params = [(D[i], Y, kernel, null_neg_mmds, phi[i], candidates[i], greeds[i]) for i in range(k)]
 
     # Each party's reward can be computed in parallel
     with Pool(k) as p:

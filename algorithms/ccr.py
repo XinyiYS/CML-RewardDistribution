@@ -30,7 +30,7 @@ def process_func(params):
                 delta = -mmds_new[j] - mu
                 G_temp.append((delta, x, As_temp[j], Bs_temp[j], j))  # Track index j so we can remove it from G_i later
 
-            G_temp.sort()
+            G_temp.sort(key=lambda tup: tup[0])
             (delta, x, A_temp, B_temp, idx_to_remove) = G_temp[
                 math.ceil(phi * (len(G_temp) - 1))]  # Get point at quantile of reward vector
             mu += delta
