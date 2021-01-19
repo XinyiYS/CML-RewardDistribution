@@ -118,6 +118,50 @@ def split(n_samples, n_participants, train_dataset=None, mode='uniform', class_s
 					data_indices[class_id] = data_indices[class_id][extra_needed:]
 		train_indices = [participant_index_list for participant_id, participant_index_list in participant_indices.items()] 
 
+	elif mode == 'custom':
+		assert n_participants == 5, "Only implemented for 5 participants right now."
+		clses = [[0.2, 0.2, 0.2, 0.2, 0.2], 
+				 [0.2, 0.2, 0.2, 0.2, 0.2],
+				 [0.6, 0.4, 0.0, 0.0, 0.0],
+				 [0.0, 0.2, 0.6, 0.2, 0.0],
+				 [0.0, 0.0, 0.0, 0.4, 0.6]]
+
+		clses = [
+				[0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1],
+				[0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1],
+				[0.3,0.3,0.2,0.2,  0,  0,  0,  0,  0,  0],
+				[  0,  0,0.1,0.1,0.3,0.3,0.1,0.1,  0,  0],
+				[  0,  0,  0,  0,  0,  0,0.2,0.2,0.3,0.3]
+				]
+		'''
+		Rows represent parties, columns represent MNIST digits (i*2, i*2+1), i.e. first col is 0 and 1, second col is 2 and 3 etc. 
+		All the rows sum to 1 and all the cols sum to 1. all the parties should end up with the same number of data points
+		
+		1st and 2nd parties are basically uniform. 3rd party has 60% of his data being 0,1, 40% being 2,3 and so on.
+		'''
+		all_classes = np.arange(len(train_dataset.classes))
+		data_indices = [torch.nonzero(train_dataset.targets == class_id).view(-1).tolist() for class_id in all_classes]
+		mean_size = n_samples // n_participants
+
+
+		participant_indices = defaultdict(list)
+		for participant_id, classes in enumerate(clses):
+			print("participant id: {} is getting class distribution as {}.".format(participant_id, classes))
+
+			for class_id, class_proportion in enumerate(classes):
+				each_class_id_size = int(mean_size * class_proportion)
+				selected_indices = data_indices[class_id][:each_class_id_size]
+				data_indices[class_id] = data_indices[class_id][each_class_id_size:] # move the data_indices pointer to avoid repeated samples to other parties
+				participant_indices[participant_id].extend(selected_indices)
+
+				# top up to make sure all participants have the same number of samples
+				if class_id == len(classes) - 1 and len(participant_indices[participant_id]) < mean_size:
+					print("Topping up to make sure all parties have the same total dataset size.")
+					extra_needed = mean_size - len(participant_indices[participant_id])
+					participant_indices[participant_id].extend(data_indices[class_id][:extra_needed])
+					data_indices[class_id] = data_indices[class_id][extra_needed:]
+		train_indices = [participant_index_list for participant_id, participant_index_list in participant_indices.items()] 
+
 	else:
 		train_indices = np.array_split(indices, n_participants)
 	return train_indices
@@ -131,8 +175,11 @@ def prepare_loaders(args, repeat=False):
 	else:
 		class_sz = 2
 	clses = None if 'clses' not in args else args['clses']
+	print("Preparing train data indices:")
 	train_indices_list = split(args['n_samples'], args['n_participants'], train_dataset=train_dataset, mode=args['split_mode'], class_sz = class_sz, clses=clses)
-	test_indices_list = split(len(test_dataset.data), args['n_participants'], train_dataset=test_dataset, mode=args['split_mode'], class_sz = class_sz, clses=clses)
+
+	print("Preparing test  data indices:")
+	test_indices_list = split(args['n_samples_test'], args['n_participants'], train_dataset=test_dataset, mode=args['split_mode'], class_sz = class_sz, clses=clses)
 
 	shuffle = True
 	if shuffle:
@@ -163,9 +210,6 @@ def prepare_loaders(args, repeat=False):
 		# repeated_joint_test_loader = repeater(joint_test_loader)
 		# test_loaders = [repeated_joint_test_loader] + repeated_test_loaders
 		return joint_loader, repeated_train_loaders, joint_test_loader, repeated_test_loaders
-
-
-
 
 from itertools import repeat, product
 

@@ -197,9 +197,10 @@ def construct_kernel(args):
 	# --------------- Complete Deep Kernel ---------------
 	model = DKLModel(feature_extractor, MLP_feature_extractor, gp_layer)
 
+
 	if torch.cuda.is_available():
 		model = model.cuda()
-		model.feature_extractor = model.feature_extractor.cuda()
+		# model.feature_extractor = model.feature_extractor.cuda()
 
 	# ---------- Optimizer and Scheduler ----------
 	optimizer = getattr(optim, args['optimizer'])([
@@ -223,18 +224,23 @@ def train_main(trial):
 	init_deterministic(args['noise_seed']) # comment this out for faster training
 
 	# ---------- Data setting ----------
-	args['dataset'] = 'CIFAR10'
+	args['dataset'] = 'MNIST'
 
-	n_participants = args['n_participants'] = 5
-	args['n_samples_per_participant'] = 2000
-	args['class_sz_per_participant'] = 2
-	args['n_samples'] = args['n_participants'] * args['n_samples_per_participant']
-	
-	args['split_mode'] = "disjointclasses" #@param ["disjointclasses","uniform"," classimbalance", "powerlaw"]
+
+	args['split_mode'] = "custom" #@param ["disjointclasses","uniform"," classimbalance", "powerlaw", 'custom']
 	args['clses'] = [[0],[1],[6],[8],[9]] if args['dataset'] == 'CIFAR10' else None
 	args['clses'] = None
 
 	args['include_joint'] = True
+
+	n_participants = args['n_participants'] = 5
+	args['n_samples_per_participant'] = 2000 
+	args['n_samples_per_participant_test'] = 1000
+	# args['class_sz_per_participant'] = 2
+	args['n_samples'] = args['n_participants'] * args['n_samples_per_participant']
+	args['n_samples_test'] = args['n_participants'] * args['n_samples_per_participant_test']
+	
+
 	# ---------- Feature extractor and latent dim setting ----------
 
 	args['num_features'] = 512 if args['dataset'] == 'CIFAR10' else 10 # latent_dims
