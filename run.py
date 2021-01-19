@@ -72,18 +72,20 @@ class DKLModel(gpytorch.Module):
 		features1 = self.get_vae_features(x1)
 		features2 = self.get_vae_features(x2)
 
-		features1 = self.MLP_feature_extractor(features1)
-		features2 = self.MLP_feature_extractor(features2)
-		
-		# features1 = self.indi_feature_extractors[pair[0]](features1)
-		# features2 = self.indi_feature_extractors[pair[1]](features2)
+		if self.MLP_feature_extractor:
+			features1 = self.MLP_feature_extractor(features1)
+			features2 = self.MLP_feature_extractor(features2)
+
 		mmd_2, Kxx_, Kxy, Kyy_ = mmd(features1.reshape(len(x1), -1), features2.reshape(len(x2), -1), k=self.gp_layer.covar_module)
 		t_stat = t_statistic(mmd_2, Kxx_, Kxy, Kyy_)
 		return mmd_2, t_stat
 	
 	def get_vae_features(self, x):
 		if 'CIFAR' in str(self.feature_extractor.__class__):
-			x_mu, x_logvar = self.feature_extractor.encode(x)
+			if 'CVAE' in str(self.feature_extractor.__class__):
+				x_mu, x_logvar = self.feature_extractor.encode(x)
+			elif 'Featurizer' in str(self.feature_extractor.__class__):
+				return self.feature_extractor(x)
 		else:
 			x_mu, x_logvar = self.feature_extractor.encoder(x)
 
@@ -166,9 +168,13 @@ def construct_kernel(args):
 
 	# --------------- Shared Feature extractor module ---------------
 	if args['dataset'] == 'CIFAR10':
-		from models.CIFAR_CVAE import CIFAR_CVAE, load_pretrain
-		CVAE = CIFAR_CVAE(latent_dims=args['num_features'])
-		feature_extractor = load_pretrain(vae=CVAE, path='CIFAR10_CVAE/model_512d.pth') # latent dimension is 512
+		# from models.CIFAR_CVAE import CIFAR_CVAE, load_pretrain
+		# CVAE = CIFAR_CVAE(latent_dims=args['num_features'])
+		# feature_extractor = load_pretrain(vae=CVAE, path='CIFAR10_CVAE/model_512d.pth') # latent dimension is 512
+	
+		from models.CIFAR_Featurizer import Featurizer
+		feature_extractor = Featurizer()
+
 	else:
 		# MNIST
 		from models.CVAE import VariationalAutoencoder, load_pretrain
@@ -180,12 +186,19 @@ def construct_kernel(args):
 	# MLP feature extractor on top of the VAEs
 	from models.feature_extractors import MLP
 	MLP_feature_extractor = MLP(args)
+	# MLP_feature_extractor = None
+
 
 	# --------------- Gaussian Process/Kernel module ---------------
 	grid_bounds=(-10., 10.)
 
 	# Should be the dimension of the output of the last layer of the feature extractor
-	(last_layer_index, last_layer) = list(MLP_feature_extractor._modules.items())[-1]
+	if MLP_feature_extractor:
+		(last_layer_index, last_layer) = list(MLP_feature_extractor._modules.items())[-1]
+	else:
+		last_layer = feature_extractor.adv_layer[0]
+
+
 	ard_num_dims = int(last_layer.out_features) if args['ard_num_dims'] else None
 
 	suggested_kernels = [getattr(gpytorch.kernels, base_kernel)(ard_num_dims=ard_num_dims,lengthscale_prior=gpytorch.priors.SmoothedBoxPrior(
@@ -197,15 +210,14 @@ def construct_kernel(args):
 	# --------------- Complete Deep Kernel ---------------
 	model = DKLModel(feature_extractor, MLP_feature_extractor, gp_layer)
 
-
 	if torch.cuda.is_available():
 		model = model.cuda()
 		# model.feature_extractor = model.feature_extractor.cuda()
 
 	# ---------- Optimizer and Scheduler ----------
 	optimizer = getattr(optim, args['optimizer'])([
-		{'params': model.feature_extractor.parameters(), 'lr': args['lr'] * 1e-2, 'weight_decay': 1e-4},
-		{'params': model.MLP_feature_extractor.parameters(),  'lr': args['lr'], 'weight_decay': 1e-4},
+		{'params': model.feature_extractor.parameters(), 'lr': args['lr'], 'weight_decay': 1e-4},
+		# {'params': model.MLP_feature_extractor.parameters(),  'lr': args['lr'], 'weight_decay': 1e-4},
 		{'params': model.gp_layer.hyperparameters(), 'lr': args['lr'] * 0.1, 'weight_decay':1e-4},
 		{'params': model.gp_layer.variational_parameters(), 'weight_decay':1e-4},
 	], lr=args['lr'], weight_decay=0)
@@ -224,7 +236,7 @@ def train_main(trial):
 	init_deterministic(args['noise_seed']) # comment this out for faster training
 
 	# ---------- Data setting ----------
-	args['dataset'] = 'MNIST'
+	args['dataset'] = 'CIFAR10'
 
 
 	args['split_mode'] = "custom" #@param ["disjointclasses","uniform"," classimbalance", "powerlaw", 'custom']
