@@ -601,12 +601,19 @@ def write_model(model, logdir, args):
 	from torchsummary import summary
 	with open(oj(logdir, 'model_summary.txt'), 'w') as file:
 		sys.stdout = file # Change the standard output to the file we created.
+		file.write('\n ----------------------- Deep Kernel Modules ----------------------- \n')
 		print(model.named_modules)
+		file.write('\n')
 		file.write('\n')
 		file.write('\n')
 		file.write('\n')
 		file.write('\n ----------------------- Feature Extractor Summary ----------------------- \n')
 		summary(model.feature_extractor, input_size=(args['num_channels'], args['image_size'], args['image_size']), batch_size=args['batch_size'])
+		file.write('\n')
+		file.write('\n')
+		file.write('\n ----------------------- GP Layer Parameters Summary ----------------------- \n')
+		print(list(model.gp_layer.named_parameters()))
+		file.write('\n')
 		sys.stdout = original_stdout # Reset the standard output to its original value
 	return
 
