@@ -92,17 +92,27 @@ def objective(args, model, optimizer, trial, train_loaders, test_loaders):
 				if X.size(0) != Y.size(0): continue
 
 				mmd_hat, mmd_std_hat, t_stat = model(X, Y)
-				print(t_stat.shape)
-				if torch.isnan(t_stat):
-					print("t_stat is nan for {} vs {}, at {}-epoch".format(i, j, epoch+1))						
-					obj = mmd_hat
-				else:
-					obj = t_stat
 
-				if i != j:
-					mmd_losses[i] += obj
-				else:
-					mmd_losses[i] += -obj
+				if len(mmd_hat.size()) == 0:
+					assert len(mmd_std_hat.size()) == 0, "mmd_std_hat shape different from mmd_hat"
+					assert len(t_stat.size()) == 0, "tstat shape different from mmd_hat"
+
+					mmd_hat = mmd_hat.reshape(-1, 1)
+					mmd_std_hat = mmd_std_hat.reshape(-1, 1)
+					t_stat = t_stat.reshape(-1, 1)
+
+				for mmd_hat_i, t_stat_i in zip(mmd_hat, t_stat):
+					if torch.isnan(t_stat_i):
+						print("t_stat is nan for {} vs {}, at {}-epoch".format(i, j, epoch+1))						
+						obj = mmd_hat_i
+					else:
+						obj = t_stat_i
+
+					obj = obj.sum()
+					if i != j:
+						mmd_losses[i] += obj
+					else:
+						mmd_losses[i] += -obj
 
 			loss = -torch.min(mmd_losses)
 			loss.backward()
