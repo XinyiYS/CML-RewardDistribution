@@ -233,7 +233,6 @@ def tabulate_dict(pairwise_dict, N):
 	return tabulate(means, headers=range(N)), tabulate(stds, headers=range(N))
 
 
-
 def evaluate(model, test_loaders, args, M=50, plot=False, logdir=None, figs_dir=None, alpha=1e4):
 	'''
 	Arguments:
@@ -283,28 +282,12 @@ def evaluate(model, test_loaders, args, M=50, plot=False, logdir=None, figs_dir=
 					'''
 					continue
 
-				mmd_hat, t_stat = model(X, Y, pair=[i, j])
+				if X.size(0) != Y.size(0): continue
+
+				mmd_hat, mmd_std_hat, t_stat = model(X, Y)
+
 				mmd_dict[str(i)+'-'+str(j)].append(mmd_hat.tolist())
 				tstat_dict[str(i)+'-'+str(j)].append(t_stat.tolist())
-
-
-
-			''' No need for permutation in evaluation
-			for m in range(M):
-				for (i,j) in pairs:
-					if i != j:
-						size = len(data[i][0]) + len(data[j][0])
-						temp = torch.cat([data[i][0], data[j][0]])
-					else:
-						size = len(data[i][0])
-						temp = data[i][0]
-					rand_inds =  torch.randperm(size)
-					X, Y = temp[rand_inds[:size//2]], temp[rand_inds[size//2:]]
-					mmd_hat, t_stat = model(X, Y, pair=[i, j])
-
-					mmd_dict[str(i)+'-'+str(j)].append(mmd_hat.tolist())
-					tstat_dict[str(i)+'-'+str(j)].append(t_stat.tolist())
-			'''
 
 	if not plot: 
 		return mmd_dict, tstat_dict
@@ -608,11 +591,13 @@ def write_model(model, logdir, args):
 		file.write('\n')
 		file.write('\n')
 		file.write('\n ----------------------- Feature Extractor Summary ----------------------- \n')
-		summary(model.feature_extractor, input_size=(args['num_channels'], args['image_size'], args['image_size']), batch_size=args['batch_size'])
+		is_cuda = next(model.parameters()).is_cuda
+		summary(model.feature_extractor, input_size=(args['num_channels'], args['image_size'], args['image_size']), 
+			batch_size=args['batch_size'], device='cuda' if is_cuda else 'cpu')
 		file.write('\n')
 		file.write('\n')
-		file.write('\n ----------------------- GP Layer Parameters Summary ----------------------- \n')
-		print(list(model.gp_layer.named_parameters()))
+		file.write('\n ----------------------- Deep Kernel Parameters Summary ----------------------- \n')
+		print(list(model.named_parameters()))
 		file.write('\n')
 		sys.stdout = original_stdout # Reset the standard output to its original value
 	return
