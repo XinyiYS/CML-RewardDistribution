@@ -92,7 +92,7 @@ def objective(args, model, optimizer, trial, train_loaders, test_loaders):
 				if X.size(0) != Y.size(0): continue
 
 				mmd_hat, mmd_std_hat, t_stat = model(X, Y)
-
+				print(t_stat.shape)
 				if torch.isnan(t_stat):
 					print("t_stat is nan for {} vs {}, at {}-epoch".format(i, j, epoch+1))						
 					obj = mmd_hat
