@@ -208,7 +208,7 @@ def train_main(trial):
 	args['include_joint'] = True
 
 	n_participants = args['n_participants'] = 5
-	args['n_samples_per_participant'] = 2000 
+	args['n_samples_per_participant'] = 6000 
 	args['n_samples_per_participant_test'] = 1000
 	# args['class_sz_per_participant'] = 2
 	args['n_samples'] = args['n_participants'] * args['n_samples_per_participant']
@@ -234,10 +234,10 @@ def train_main(trial):
 	args['num_classes'] = 10
 
 	# ---------- Optuna ----------
-	args['epochs'] = trial.suggest_int("epochs", 25, 200, 25)
+	args['epochs'] = trial.suggest_int("epochs", 25, 400, 25)
 	# args['epochs'] = 0
-	args['batch_size'] = trial.suggest_int("batch_size", 256, 1024, 64)
-	# args['batch_size'] = 4
+	args['batch_size'] = trial.suggest_int("batch_size", 512, 2048, 128)
+	# args['batch_size'] = 8
 
 	args['optimizer'] = "Adam"
 	args['lr'] = trial.suggest_float("lr", 1e-5, 1e-1, log=True)
@@ -262,7 +262,7 @@ def train_main(trial):
 	args['logdir'] = logdir
 	
 	write_model(model, logdir, args)	
-	# sys.stdout = open(os.path.join(logdir, 'log'), "w")
+	sys.stdout = open(os.path.join(logdir, 'log'), "w")
 
 
 	# --------------- Make use of multiple GPUs if available ---------------

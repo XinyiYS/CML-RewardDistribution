@@ -31,7 +31,12 @@ if __name__=='__main__':
 	init_deterministic(args['noise_seed']) # comment this out for faster runtime
 
 	# --------- Initialize the kernel, including initializing and loading pretrained weights for the shared feature extrator 
-	kernel, _ = construct_kernel(args)
+	# try:
+		# kernel, _ = old_construct_kernel(args)
+	# except:
+	kernel, _ = new_construct_kernel(args)
+	if torch.cuda.is_available():
+		kernel = kernel.cuda()
 
 	# --------- Load pretrained weights: including the individual MLP layers and the Gpytorch Hyperparameters
 	kernel = load_kernel(kernel, oj(load_dir, 'trained_kernels'))
