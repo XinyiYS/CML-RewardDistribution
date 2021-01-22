@@ -203,12 +203,12 @@ def train_main(trial):
 
 	args['split_mode'] = "custom" #@param ["disjointclasses","uniform"," classimbalance", "powerlaw", 'custom']
 	args['clses'] = [[0],[1],[6],[8],[9]] if args['dataset'] == 'CIFAR10' else None
-	args['clses'] = None
+	# args['clses'] = None
 
 	args['include_joint'] = True
 
 	n_participants = args['n_participants'] = 5
-	args['n_samples_per_participant'] = 6000 
+	args['n_samples_per_participant'] = 4000 
 	args['n_samples_per_participant_test'] = 1000
 	# args['class_sz_per_participant'] = 2
 	args['n_samples'] = args['n_participants'] * args['n_samples_per_participant']

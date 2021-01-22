@@ -120,19 +120,28 @@ def split(n_samples, n_participants, train_dataset=None, mode='uniform', class_s
 
 	elif mode == 'custom':
 		assert n_participants == 5, "Only implemented for 5 participants right now."
-		clses = [[0.2, 0.2, 0.2, 0.2, 0.2], 
-				 [0.2, 0.2, 0.2, 0.2, 0.2],
-				 [0.6, 0.4, 0.0, 0.0, 0.0],
-				 [0.0, 0.2, 0.6, 0.2, 0.0],
-				 [0.0, 0.0, 0.0, 0.4, 0.6]]
+		
+		if clses is not None and len(clses) == 5:
+			clses_distributions = [
+							[0.2, 0.2, 0.2, 0.2, 0.2], 
+					 		[0.2, 0.2, 0.2, 0.2, 0.2],
+					 		[0.6, 0.4, 0.0, 0.0, 0.0],
+					 		[0.0, 0.2, 0.6, 0.2, 0.0],
+					 		[0.0, 0.0, 0.0, 0.4, 0.6]]
+		else:
+			clses = torch.arange(10).reshape(-1, 1).tolist()
 
-		clses = [
-				[0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1],
-				[0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1],
-				[0.3,0.3,0.2,0.2,  0,  0,  0,  0,  0,  0],
-				[  0,  0,0.1,0.1,0.3,0.3,0.1,0.1,  0,  0],
-				[  0,  0,  0,  0,  0,  0,0.2,0.2,0.3,0.3]
-				]
+			clses_distributions = [
+					[0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1],
+					[0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1],
+					[0.3,0.3,0.2,0.2,  0,  0,  0,  0,  0,  0],
+					[  0,  0,0.1,0.1,0.3,0.3,0.1,0.1,  0,  0],
+					[  0,  0,  0,  0,  0,  0,0.2,0.2,0.3,0.3]
+					]
+
+		assert len(clses) == len(clses_distributions[0]), "Custom Classes and the Class ditributions are of different shapes."
+
+
 		'''
 		Rows represent parties, columns represent MNIST digits (i*2, i*2+1), i.e. first col is 0 and 1, second col is 2 and 3 etc. 
 		All the rows sum to 1 and all the cols sum to 1. all the parties should end up with the same number of data points
@@ -145,17 +154,24 @@ def split(n_samples, n_participants, train_dataset=None, mode='uniform', class_s
 
 
 		participant_indices = defaultdict(list)
-		for participant_id, classes in enumerate(clses):
-			print("participant id: {} is getting class distribution as {}.".format(participant_id, classes))
+		for participant_id, clases_distribution in enumerate(clses_distributions):
 
-			for class_id, class_proportion in enumerate(classes):
+		# for participant_id, classes in enumerate(clses_distributions):
+			print("participant id: {} is getting classes {} with distribution as {}.".format(participant_id, clses, clases_distribution))
+
+			for j, (class_id, class_proportion) in enumerate(zip(clses, clases_distribution)):
+				if isinstance(class_id, list): class_id = class_id[0] # class_id is a list of one int
+
 				each_class_id_size = int(mean_size * class_proportion)
 				selected_indices = data_indices[class_id][:each_class_id_size]
 				data_indices[class_id] = data_indices[class_id][each_class_id_size:] # move the data_indices pointer to avoid repeated samples to other parties
 				participant_indices[participant_id].extend(selected_indices)
 
 				# top up to make sure all participants have the same number of samples
-				if class_id == len(classes) - 1 and len(participant_indices[participant_id]) < mean_size:
+
+
+				if j == len(clses) - 1 and len(participant_indices[participant_id]) < mean_size:
+					
 					print("Topping up to make sure all parties have the same total dataset size.")
 					extra_needed = mean_size - len(participant_indices[participant_id])
 					participant_indices[participant_id].extend(data_indices[class_id][:extra_needed])
@@ -175,6 +191,7 @@ def prepare_loaders(args, repeat=False):
 	else:
 		class_sz = 2
 	clses = None if 'clses' not in args else args['clses']
+	print("Custom Classes are:", clses)
 	print("Preparing train data indices:")
 	train_indices_list = split(args['n_samples'], args['n_participants'], train_dataset=train_dataset, mode=args['split_mode'], class_sz = class_sz, clses=clses)
 
@@ -198,6 +215,25 @@ def prepare_loaders(args, repeat=False):
 	train_indices = list(itertools.chain.from_iterable(train_indices_list))
 	joint_loader = DataLoader(dataset=train_dataset, batch_size=args['batch_size'], sampler=SubsetRandomSampler(train_indices))
 	# test_loader = DataLoader(dataset=test_dataset, batch_size=10000, shuffle=True)
+
+	'''
+	from collections import defaultdict
+	for train_loader in train_loaders:
+		labels = defaultdict(int)
+		for i, (data, target) in enumerate(train_loader):
+			for t in target:
+				labels[int(t.item())]+=1
+		print(labels)
+
+
+	for test_loader in test_loaders:
+		labels = defaultdict(int)
+		for i, (data, target) in enumerate(test_loader):
+			for t in target:
+				labels[int(t.item())]+=1
+		print(labels)
+	exit()
+	'''
 
 	test_indices = list(itertools.chain.from_iterable(test_indices_list))
 	joint_test_loader = DataLoader(dataset=test_dataset, batch_size=args['batch_size'], sampler=SubsetRandomSampler(test_indices))
