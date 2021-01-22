@@ -98,7 +98,7 @@ def norm(lst):
     return list(map(lambda x: (x)/(max_val), lst))
 
 
-def perm_sampling_neg_biased(P, Q, k, num_perms=200, eta=1.0):
+def perm_sampling_neg_biased_variant(P, Q, k, num_perms=200, eta=1.0):
     """
     Shuffles two datasets together, splits this mix in 2, then calculates MMD to simulate P=Q. Does this num_perms
     number of times.
@@ -118,6 +118,29 @@ def perm_sampling_neg_biased(P, Q, k, num_perms=200, eta=1.0):
         p = np.random.permutation(len(XY))
         X = XY[p[:num_samples]]
         Y = XY[p[num_samples:num_samples*2]]
+        mmds.append(mmd_neg_biased(X, Y, k)[0])
+    return sorted(mmds)
+
+
+def perm_sampling_neg_biased(P, Q, k, num_perms=200, eta=1.0):
+    """
+    Shuffles two datasets together, splits this mix in 2, then calculates MMD to simulate P=Q. Does this num_perms
+    number of times.
+    :param P: First dataset, array of shape (n, d)
+    :param Q: Second dataset, array of shape (m, d)
+    :param k: GPyTorch kernel
+    :param num_perms: Number of permutations done to get range of MMD values.
+    :param eta: Fraction of samples taken in each shuffle. The larger this parameter, the smaller the variance in the estimate. Defaults
+    to 0.5*(n+m)
+    :return: Sorted list of MMD values.
+    """
+    mmds = []
+    num_samples = int(eta * P.shape[0])
+
+    for _ in trange(num_perms, desc="Permutation sampling"):
+        p = np.random.permutation(len(P))
+        X = P[p[:num_samples]]
+        Y = Q
         mmds.append(mmd_neg_biased(X, Y, k)[0])
     return sorted(mmds)
 
@@ -180,19 +203,20 @@ def get_eta_q(vN, alpha, v_is, perm_samp_dataset, reference_dataset, kernel, low
     elif mode == "max":
         condition = max_condition
     
-    # Check low
-    eta = low
-    sorted_vX = perm_sampling_neg_biased(perm_samp_dataset, reference_dataset, kernel, num_perms=200, eta=eta)
-    q = get_q(sorted_vX, vN)
-    if condition(q):
-        raise ValueError("Low value of eta already satisfies {} condition".format(mode))
-    
     # Check high
     eta = high 
     sorted_vX = perm_sampling_neg_biased(perm_samp_dataset, reference_dataset, kernel, num_perms=200, eta=eta)
     q = get_q(sorted_vX, vN)
     if not condition(q):
         raise ValueError("High value of eta already violates {} condition".format(mode))
+    
+    # Check low
+    eta = low
+    sorted_vX = perm_sampling_neg_biased(perm_samp_dataset, reference_dataset, kernel, num_perms=200, eta=eta)
+    q = get_q(sorted_vX, vN)
+    if condition(q):
+        print("Low value of eta already satisfies {} condition".format(mode))
+        return eta, q
     
     current_low = low
     current_high = high
@@ -253,7 +277,7 @@ def v_update_batch(x, X, Y, S_X, S_XY, k):
     return current_v, S_X_arr, S_XY_arr
 
 
-def weighted_sampling(candidates, D, mu_target, Y, kernel, greed):
+def weighted_sampling(candidates, D, mu_target, Y, kernel, greed, rel_tol=1e-03):
     print("Running weighted sampling algorithm with -MMD^2 target {}".format(mu_target))
     m = candidates.shape[0]
     R = []
@@ -291,9 +315,9 @@ def weighted_sampling(candidates, D, mu_target, Y, kernel, greed):
             
             R.append(np.squeeze(x).copy())
             G = np.delete(G, idx, axis=0)
-            t1.set_postfix(point=x, delta=delta, mu=mu)
+            t1.set_postfix(delta=str(delta), mu=str(mu), target=str(mu_target))
 
-            if mu > mu_target:  # Exit condition
+            if mu > (1-rel_tol) * mu_target:  # Exit condition
                 break
 
     return R, deltas, mus
