@@ -165,6 +165,35 @@ def get_q(sorted_vX, vN):
     return q
 
 
+def get_vCi(i, phi, v):
+    lower_phi = []
+    for j in range(len(phi)):
+        if phi[j] <= phi[i-1]:
+            lower_phi.append(j+1)
+    return v[repr(set(lower_phi))]
+
+
+def get_q_rho(alpha, v_is, vN, phi, v, cond='R5'):
+    rho = 1
+ 
+    if cond == 'R5':
+        for i in range(len(alpha)):
+            if alpha[i] == 1:
+                continue
+            else:
+                if (np.log(v_is[i]) - np.log(vN)) / np.log(alpha[i]) < rho:
+                    rho = (np.log(v_is[i]) - np.log(vN)) / np.log(alpha[i])
+    else:
+        for i in range(len(alpha)):
+            if alpha[i] == 1:
+                continue
+            else:
+                vCi = get_vCi(i+1, phi, v)
+                if (np.log(vCi) - np.log(vN)) / np.log(alpha[i]) < rho:
+                    rho = (np.log(vCi) - np.log(vN)) / np.log(alpha[i])
+    return lambda x: x ** rho * vN, rho
+
+
 def get_vN(v, num_parties):
     return v[repr(set(range(1, num_parties+1)))]
 
@@ -180,7 +209,7 @@ def get_v_is(v, num_parties):
     return [v[repr(set([i]))] for i in range(1, num_parties+1)]
 
 
-def get_eta_q(vN, alpha, v_is, perm_samp_dataset, reference_dataset, kernel, low=0.001, high=1., num_iters=10, mode="all"):
+def get_eta_q(vN, alpha, v_is, phi, v, perm_samp_dataset, reference_dataset, kernel, low=0.001, high=1., num_iters=10, mode="all"):
     """
     Binary search for lowest value of eta that satisfies desired condition
     alpha_i: list of N alpha values
@@ -192,16 +221,24 @@ def get_eta_q(vN, alpha, v_is, perm_samp_dataset, reference_dataset, kernel, low
         """
         return all([q(alpha[i]) > v_is[i] for i in range(len(alpha))])
     
+    
     def max_condition(q):
         """
         q(alpha^+_{min})> max(v(i))
         """
         return q(get_alpha_min(alpha)) > max(v_is)
     
+    
+    def stable_condition(q):
+        return all([q(alpha[i]) >= get_vCi(i+1, phi, v) for i in range(len(alpha))])
+        
+    
     if mode == "all":
         condition = all_condition
     elif mode == "max":
         condition = max_condition
+    elif mode == "stable":
+        condition = stable_condition
     
     # Check high
     eta = high 
@@ -317,7 +354,7 @@ def weighted_sampling(candidates, D, mu_target, Y, kernel, greed, rel_tol=1e-03)
             G = np.delete(G, idx, axis=0)
             t1.set_postfix(delta=str(delta), mu=str(mu), target=str(mu_target))
 
-            if mu > (1-rel_tol) * mu_target:  # Exit condition
+            if mu > (1-rel_tol) * mu_target or len(G) == 0:  # Exit condition
                 break
 
     return R, deltas, mus
@@ -329,12 +366,12 @@ def process_func(params):
     :param params: (D, D[i], Y, kernel, null_mmds, phi, candidates)
     :return: List of rewards
     """
-    D_i, Y, kernel, mu, candidates, greed = params
+    D_i, Y, kernel, mu, candidates, greed, rel_tol = params
 
-    return weighted_sampling(candidates, D_i, mu, Y, kernel, greed)
+    return weighted_sampling(candidates, D_i, mu, Y, kernel, greed, rel_tol)
 
 
-def reward_realization(candidates, Y, r, D, kernel, greeds=None):
+def reward_realization(candidates, Y, r, D, kernel, greeds=None, rel_tol=1e-3):
     """
     Reward realization algorithm. Defaults to pure greedy algorithm
     :param candidates: Candidate points from generator distribution, one for each party. array of shape (k, m, d)
@@ -351,7 +388,7 @@ def reward_realization(candidates, Y, r, D, kernel, greeds=None):
         greeds = [-1] * k
 
     # Construct params list
-    params = [(D[i], Y, kernel, r[i], candidates[i], greeds[i]) for i in range(k)]
+    params = [(D[i], Y, kernel, r[i], candidates[i], greeds[i], rel_tol) for i in range(k)]
 
     # Each party's reward can be computed in parallel
     with Pool(k) as p:
