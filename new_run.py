@@ -59,7 +59,7 @@ class DKL(nn.Module):
 		mmd_hat = -1 * mmd2
 		mmd_std_hat = torch.sqrt(varEst + 10 ** (-8))
 
-		return mmd_hat, mmd_std_hat, torch.div(mmd_hat, mmd_std_hat)
+		return mmd_hat, torch.div(mmd_hat, mmd_std_hat)
 		 
 def objective(args, model, optimizer, trial, train_loaders, test_loaders):
 

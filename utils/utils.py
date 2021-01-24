@@ -321,7 +321,7 @@ def evaluate(model, test_loaders, args, M=50, plot=False, logdir=None, figs_dir=
 				if X.size(0) != Y.size(0): continue
 
 
-				mmd_hat, mmd_std_hat, t_stat = model(X, Y)
+				mmd_hat, t_stat = model(X, Y)
 
 				# to deal with Multiple GPU partitioned tensors
 				mmd_hat = torch.sum(mmd_hat)
