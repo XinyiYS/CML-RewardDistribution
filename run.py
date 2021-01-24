@@ -20,7 +20,7 @@ import gpytorch
 from gpytorch.kernels import ScaleKernel, AdditiveKernel, RBFKernel, PolynomialKernel, MaternKernel
 
 class GaussianProcessLayer(gpytorch.models.ApproximateGP):
-	def __init__(self, num_dim, grid_bounds=(-10., 10.), grid_size=64, K_covar_module=None, q_covar_module=None):
+	def __init__(self, num_dim, grid_bounds=(-10., 10.), grid_size=64, covar_module=None):
 		variational_distribution = gpytorch.variational.CholeskyVariationalDistribution(
 			num_inducing_points=grid_size, batch_shape=torch.Size([num_dim]))
 		
@@ -36,14 +36,25 @@ class GaussianProcessLayer(gpytorch.models.ApproximateGP):
 		super().__init__(variational_strategy)
 
 
-		self.epsilon = torch.tensor(1e-1)
-		self.register_parameter(name="K_epsilon", parameter=torch.nn.Parameter(self.epsilon))
+		if covar_module:
+			self.covar_module = covar_module
+		else:
+			self.covar_module = gpytorch.kernels.ScaleKernel(
+				gpytorch.kernels.RBFKernel(
+					active_dims=torch.tensor([0,1,2,3,4]),
+					lengthscale_prior=gpytorch.priors.SmoothedBoxPrior(
+						math.exp(-1), math.exp(1), sigma=0.1, transform=torch.exp
+					)
+				) + gpytorch.kernels.RBFKernel(
+					active_dims=torch.tensor([5,6,7,8,9]),
+					lengthscale_prior=gpytorch.priors.SmoothedBoxPrior(
+						math.exp(-1), math.exp(1), sigma=0.1, transform=torch.exp
+					)
+				) 
+			) 
 
-		self.covar_module = ScaleKernel(K_covar_module, gpytorch.priors.SmoothedBoxPrior(1.0-self.epsilon, math.exp(1), sigma=0.1, transform=torch.exp) ) * q_covar_module
-		
-		self.mean_module = gpytorch.means.ConstantMean(prior=gpytorch.priors.SmoothedBoxPrior(self.epsilon, math.exp(1), sigma=0.1, transform=torch.exp))
+		self.mean_module = gpytorch.means.ConstantMean()
 		self.grid_bounds = grid_bounds
-
 
 	def forward(self, x):
 		mean = self.mean_module(x)
@@ -61,7 +72,7 @@ class DKLModel(gpytorch.Module):
 		self.MLP_feature_extractor = MLP_feature_extractor
 		self.gp_layer = gp_layer
 
-	def forward(self, x1, x2, pair, A=None, B=None, C=None):
+	def forward(self, x1, x2, A=None, B=None, C=None):
 		features1 = self.extract_features(x1)
 		features2 = self.extract_features(x2)
 
@@ -116,7 +127,7 @@ def objective(args, model, optimizer, trial, train_loaders, test_loaders):
 					if X.size(0) < 4 or Y.size(0) < 4: continue
 					# Too small a batch leftover, would cause the t-statistic to be undefined, so skip
 
-					mmd_hat, t_stat = model(X, Y, pair=[i, j])
+					mmd_hat, t_stat = model(X, Y)
 					if torch.isnan(t_stat):
 						print("t_stat is nan for {} vs {}, at {}-epoch".format(i, j, epoch+1))						
 						obj = mmd_hat
@@ -165,12 +176,14 @@ def construct_kernel(args):
 
 	# --------------- Shared Feature extractor module ---------------
 	if args['dataset'] == 'CIFAR10':
-		# from models.CIFAR_CVAE import CIFAR_CVAE, load_pretrain
-		# CVAE = CIFAR_CVAE(latent_dims=args['num_features'])
-		# feature_extractor = load_pretrain(vae=CVAE, path='CIFAR10_CVAE/model_512d.pth') # latent dimension is 512
-	
-		from models.CIFAR_Featurizer import Featurizer
-		feature_extractor = Featurizer()
+		from models.CIFAR_CVAE import CIFAR_CVAE, load_pretrain
+		CVAE = CIFAR_CVAE(latent_dims=args['num_features'])
+		feature_extractor = load_pretrain(vae=CVAE, path='CIFAR10_CVAE/model_512d.pth') # latent dimension is 512
+		from models.feature_extractors import MLP
+		MLP_feature_extractor = MLP(args)
+
+		# from models.CIFAR_Featurizer import Featurizer
+		# feature_extractor = Featurizer()
 
 	else:
 		# MNIST
@@ -196,18 +209,10 @@ def construct_kernel(args):
 
 	ard_num_dims = int(last_layer.out_features) if args['ard_num_dims'] else None
 
-	# suggested_kernels = [getattr(gpytorch.kernels, base_kernel)(ard_num_dims=ard_num_dims,lengthscale_prior=gpytorch.priors.SmoothedBoxPrior(
-					# math.exp(-1), math.exp(1), sigma=0.1, transform=torch.exp)) for base_kernel in args['base_kernels'] ]
-	# covar_module = ScaleKernel(AdditiveKernel(*suggested_kernels))
-	# gp_layer = GaussianProcessLayer(covar_module=covar_module, num_dim=args['num_features'], grid_bounds=grid_bounds)
-
-
-	K_covar_module = gpytorch.kernels.RBFKernel(lengthscale_prior=gpytorch.priors.SmoothedBoxPrior(math.exp(-1), math.exp(1), sigma=0.1, transform=torch.exp))
-	# K_kernel = GaussianProcessLayer(covar_module=K_covar_module, num_dim=args['num_features'], grid_bounds=grid_bounds)
-
-	q_covar_module = gpytorch.kernels.RBFKernel(lengthscale_prior=gpytorch.priors.SmoothedBoxPrior(math.exp(-1), math.exp(1), sigma=0.1, transform=torch.exp))
-	# q_kernel = GaussianProcessLayer(covar_module=q_covar_module, num_dim=args['num_features'], grid_bounds=grid_bounds)
-	gp_layer = GaussianProcessLayer(K_covar_module=K_covar_module, q_covar_module=q_covar_module, num_dim=args['num_features'], grid_bounds=grid_bounds)
+	suggested_kernels = [getattr(gpytorch.kernels, base_kernel)(ard_num_dims=ard_num_dims,lengthscale_prior=gpytorch.priors.SmoothedBoxPrior(
+					math.exp(-1), math.exp(1), sigma=0.1, transform=torch.exp)) for base_kernel in args['base_kernels'] ]
+	covar_module = ScaleKernel(AdditiveKernel(*suggested_kernels))
+	gp_layer = GaussianProcessLayer(covar_module=covar_module, num_dim=args['num_features'], grid_bounds=grid_bounds)
 
 	# --------------- Complete Deep Kernel ---------------
 
@@ -220,7 +225,7 @@ def construct_kernel(args):
 	# ---------- Optimizer and Scheduler ----------
 	optimizer = getattr(optim, args['optimizer'])([
 		{'params': model.feature_extractor.parameters(), 'lr': args['lr'], 'weight_decay': 1e-4},
-		# {'params': model.MLP_feature_extractor.parameters(),  'lr': args['lr'], 'weight_decay': 1e-4},
+		{'params': model.MLP_feature_extractor.parameters(),  'lr': args['lr'], 'weight_decay': 1e-4},
 		{'params': model.gp_layer.hyperparameters(), 'lr': args['lr'] * 0.1, 'weight_decay':1e-4},
 		{'params': model.gp_layer.variational_parameters(), 'weight_decay':1e-4},
 	], lr=args['lr'], weight_decay=0)
@@ -244,7 +249,7 @@ def train_main(trial):
 
 	args['split_mode'] = "custom" #@param ["disjointclasses","uniform"," classimbalance", "powerlaw", 'custom']
 	args['clses'] = [[0],[1],[6],[8],[9]] if args['dataset'] == 'CIFAR10' else None
-	args['clses'] = None
+	# args['clses'] = None
 
 	args['include_joint'] = True
 
