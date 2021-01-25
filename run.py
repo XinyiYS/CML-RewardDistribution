@@ -75,8 +75,13 @@ class DKLModel(gpytorch.Module):
 		features1 = self.extract_features(x1)
 		features2 = self.extract_features(x2)
 
+		mmd_2, t_stat = self.get_mmd(features1, features2)
+		# mmd_2, Kxx_, Kxy, Kyy_ = mmd(features1.reshape(len(x1), -1), features2.reshape(len(x2), -1), k=self.gp_layer.covar_module)
+		# t_stat = t_statistic(mmd_2, Kxx_, Kxy, Kyy_)
+		return mmd_2, t_stat
 
-		mmd_2, Kxx_, Kxy, Kyy_ = mmd(features1.reshape(len(x1), -1), features2.reshape(len(x2), -1), k=self.gp_layer.covar_module)
+	def get_mmd(self, features1, features2):
+		mmd_2, Kxx_, Kxy, Kyy_ = mmd(features1, features2, k=self.gp_layer.covar_module)
 		t_stat = t_statistic(mmd_2, Kxx_, Kxy, Kyy_)
 		return mmd_2, t_stat
 
@@ -94,7 +99,7 @@ class DKLModel(gpytorch.Module):
 		if self.MLP_feature_extractor:
 			features = self.MLP_feature_extractor(features)
 		
-		return features
+		return features.reshape(len(x), -1)
 
 def objective(args, model, optimizer, trial, train_loaders, test_loaders):
 
@@ -169,8 +174,6 @@ def construct_kernel(args):
 
 
 	# --------------- Feature extractor module ---------------
-
-
 	MLP_feature_extractor = None
 
 	# --------------- Shared Feature extractor module ---------------
