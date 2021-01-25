@@ -29,7 +29,7 @@ import torch.nn as nn
 import torch
 from torchsummary import summary
 
-from utils.DK_tst_utils_HD import MatConvert, Pdist2, MMDu, TST_MMD_adaptive_bandwidth, TST_MMD_u, TST_C2ST_D, TST_LCE_D
+from utils.DK_tst_utils_HD import MatConvert, Pdist2, MMDu, TST_MMD_adaptive_bandwidth, TST_MMD_u
 
 # Setup seeds
 os.makedirs("images", exist_ok=True)
@@ -153,10 +153,10 @@ for kk in range(K):
     sigma0OPT.requires_grad = True
     # print(epsilonOPT.item())
     if cuda:
+        featurizer = featurizer.to(torch.device('cuda'))
         if torch.torch.cuda.device_count() > 1:
             featurizer =  nn.DataParallel(featurizer, device_ids=list(range(torch.torch.cuda.device_count())))
-        else:
-            featurizer = featurizer.to(torch.device('cuda'))
+
 
 
     # Initialize optimizers
@@ -263,9 +263,7 @@ for kk in range(K):
                 sigma0_u = sigma0OPT ** 2
 
                 # Compute Compute J (STAT_u)        
-                if len(X) != len(Y):
-                    continue
-                    print("model output", modelu_output.shape, X.shape, XY.shape)
+                if len(X) != len(Y): continue
 
                 TEMP = MMDu(modelu_output, X.shape[0], XY.view(XY.shape[0],-1), sigma, sigma0_u, ep)
                 mmd_value_temp = -1 * (TEMP[0])
@@ -323,6 +321,11 @@ for kk in range(K):
     os.makedirs(mmd_dir, exist_ok=True)
     os.makedirs(tstat_dir, exist_ok=True)
 
+    from utils.plot import plot_together
+    plot_together(mmd_dir, N=N, name='MMD', save=True, fig_dir=figs_dir)
+    plot_together(tstat_dict, N=N, name='tStatistic', save=True, fig_dir=figs_dir)
+
+    '''
     # plot and save MMD hats    
     for i in range(N):
         for j in range(N):
@@ -364,7 +367,6 @@ for kk in range(K):
     # Run two-sample test on the training set
     # Fetch training data
     
-    '''
     s1 = data_all[Ind_tr]
     s2 = data_trans[Ind_tr_v4]
     S = torch.cat([s1.cpu(), s2.cpu()], 0).cuda()

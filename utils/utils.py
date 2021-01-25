@@ -120,19 +120,28 @@ def split(n_samples, n_participants, train_dataset=None, mode='uniform', class_s
 
 	elif mode == 'custom':
 		assert n_participants == 5, "Only implemented for 5 participants right now."
-		clses = [[0.2, 0.2, 0.2, 0.2, 0.2], 
-				 [0.2, 0.2, 0.2, 0.2, 0.2],
-				 [0.6, 0.4, 0.0, 0.0, 0.0],
-				 [0.0, 0.2, 0.6, 0.2, 0.0],
-				 [0.0, 0.0, 0.0, 0.4, 0.6]]
+		
+		if clses is not None and len(clses) == 5:
+			clses_distributions = [
+							[0.2, 0.2, 0.2, 0.2, 0.2], 
+					 		[0.2, 0.2, 0.2, 0.2, 0.2],
+					 		[0.6, 0.4, 0.0, 0.0, 0.0],
+					 		[0.0, 0.2, 0.6, 0.2, 0.0],
+					 		[0.0, 0.0, 0.0, 0.4, 0.6]]
+		else:
+			clses = torch.arange(10).reshape(-1, 1).tolist()
 
-		clses = [
-				[0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1],
-				[0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1],
-				[0.3,0.3,0.2,0.2,  0,  0,  0,  0,  0,  0],
-				[  0,  0,0.1,0.1,0.3,0.3,0.1,0.1,  0,  0],
-				[  0,  0,  0,  0,  0,  0,0.2,0.2,0.3,0.3]
-				]
+			clses_distributions = [
+					[0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1],
+					[0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1],
+					[0.3,0.3,0.2,0.2,  0,  0,  0,  0,  0,  0],
+					[  0,  0,0.1,0.1,0.3,0.3,0.1,0.1,  0,  0],
+					[  0,  0,  0,  0,  0,  0,0.2,0.2,0.3,0.3]
+					]
+
+		assert len(clses) == len(clses_distributions[0]), "Custom Classes and the Class ditributions are of different shapes."
+
+
 		'''
 		Rows represent parties, columns represent MNIST digits (i*2, i*2+1), i.e. first col is 0 and 1, second col is 2 and 3 etc. 
 		All the rows sum to 1 and all the cols sum to 1. all the parties should end up with the same number of data points
@@ -145,17 +154,24 @@ def split(n_samples, n_participants, train_dataset=None, mode='uniform', class_s
 
 
 		participant_indices = defaultdict(list)
-		for participant_id, classes in enumerate(clses):
-			print("participant id: {} is getting class distribution as {}.".format(participant_id, classes))
+		for participant_id, clases_distribution in enumerate(clses_distributions):
 
-			for class_id, class_proportion in enumerate(classes):
+		# for participant_id, classes in enumerate(clses_distributions):
+			print("participant id: {} is getting classes {} with distribution as {}.".format(participant_id, clses, clases_distribution))
+
+			for j, (class_id, class_proportion) in enumerate(zip(clses, clases_distribution)):
+				if isinstance(class_id, list): class_id = class_id[0] # class_id is a list of one int
+
 				each_class_id_size = int(mean_size * class_proportion)
 				selected_indices = data_indices[class_id][:each_class_id_size]
 				data_indices[class_id] = data_indices[class_id][each_class_id_size:] # move the data_indices pointer to avoid repeated samples to other parties
 				participant_indices[participant_id].extend(selected_indices)
 
 				# top up to make sure all participants have the same number of samples
-				if class_id == len(classes) - 1 and len(participant_indices[participant_id]) < mean_size:
+
+
+				if j == len(clses) - 1 and len(participant_indices[participant_id]) < mean_size:
+					
 					print("Topping up to make sure all parties have the same total dataset size.")
 					extra_needed = mean_size - len(participant_indices[participant_id])
 					participant_indices[participant_id].extend(data_indices[class_id][:extra_needed])
@@ -175,11 +191,13 @@ def prepare_loaders(args, repeat=False):
 	else:
 		class_sz = 2
 	clses = None if 'clses' not in args else args['clses']
+	print("Custom Classes are:", clses)
 	print("Preparing train data indices:")
 	train_indices_list = split(args['n_samples'], args['n_participants'], train_dataset=train_dataset, mode=args['split_mode'], class_sz = class_sz, clses=clses)
 
 	print("Preparing test  data indices:")
-	test_indices_list = split(args['n_samples_test'], args['n_participants'], train_dataset=test_dataset, mode=args['split_mode'], class_sz = class_sz, clses=clses)
+	n_samples_test = args['n_samples_test'] if 'n_samples_test' in args else len(test_dataset)
+	test_indices_list = split(n_samples_test, args['n_participants'], train_dataset=test_dataset, mode=args['split_mode'], class_sz = class_sz, clses=clses)
 
 	shuffle = True
 	if shuffle:
@@ -198,6 +216,25 @@ def prepare_loaders(args, repeat=False):
 	train_indices = list(itertools.chain.from_iterable(train_indices_list))
 	joint_loader = DataLoader(dataset=train_dataset, batch_size=args['batch_size'], sampler=SubsetRandomSampler(train_indices))
 	# test_loader = DataLoader(dataset=test_dataset, batch_size=10000, shuffle=True)
+
+	'''
+	from collections import defaultdict
+	for train_loader in train_loaders:
+		labels = defaultdict(int)
+		for i, (data, target) in enumerate(train_loader):
+			for t in target:
+				labels[int(t.item())]+=1
+		print(labels)
+
+
+	for test_loader in test_loaders:
+		labels = defaultdict(int)
+		for i, (data, target) in enumerate(test_loader):
+			for t in target:
+				labels[int(t.item())]+=1
+		print(labels)
+	exit()
+	'''
 
 	test_indices = list(itertools.chain.from_iterable(test_indices_list))
 	joint_test_loader = DataLoader(dataset=test_dataset, batch_size=args['batch_size'], sampler=SubsetRandomSampler(test_indices))
@@ -231,7 +268,6 @@ def tabulate_dict(pairwise_dict, N):
 		stds[i, j] = np.std(pairwise_dict[pair])
 
 	return tabulate(means, headers=range(N)), tabulate(stds, headers=range(N))
-
 
 
 def evaluate(model, test_loaders, args, M=50, plot=False, logdir=None, figs_dir=None, alpha=1e4):
@@ -283,28 +319,17 @@ def evaluate(model, test_loaders, args, M=50, plot=False, logdir=None, figs_dir=
 					'''
 					continue
 
-				mmd_hat, t_stat = model(X, Y, pair=[i, j])
+				if X.size(0) != Y.size(0): continue
+
+
+				mmd_hat, t_stat = model(X, Y)
+
+				# to deal with Multiple GPU partitioned tensors
+				mmd_hat = torch.sum(mmd_hat)
+				t_stat = torch.sum(t_stat)
+
 				mmd_dict[str(i)+'-'+str(j)].append(mmd_hat.tolist())
 				tstat_dict[str(i)+'-'+str(j)].append(t_stat.tolist())
-
-
-
-			''' No need for permutation in evaluation
-			for m in range(M):
-				for (i,j) in pairs:
-					if i != j:
-						size = len(data[i][0]) + len(data[j][0])
-						temp = torch.cat([data[i][0], data[j][0]])
-					else:
-						size = len(data[i][0])
-						temp = data[i][0]
-					rand_inds =  torch.randperm(size)
-					X, Y = temp[rand_inds[:size//2]], temp[rand_inds[size//2:]]
-					mmd_hat, t_stat = model(X, Y, pair=[i, j])
-
-					mmd_dict[str(i)+'-'+str(j)].append(mmd_hat.tolist())
-					tstat_dict[str(i)+'-'+str(j)].append(t_stat.tolist())
-			'''
 
 	if not plot: 
 		return mmd_dict, tstat_dict
@@ -601,12 +626,21 @@ def write_model(model, logdir, args):
 	from torchsummary import summary
 	with open(oj(logdir, 'model_summary.txt'), 'w') as file:
 		sys.stdout = file # Change the standard output to the file we created.
+		file.write('\n ----------------------- Deep Kernel Modules ----------------------- \n')
 		print(model.named_modules)
 		file.write('\n')
 		file.write('\n')
 		file.write('\n')
+		file.write('\n')
 		file.write('\n ----------------------- Feature Extractor Summary ----------------------- \n')
-		summary(model.feature_extractor, input_size=(args['num_channels'], args['image_size'], args['image_size']), batch_size=args['batch_size'])
+		is_cuda = next(model.parameters()).is_cuda
+		summary(model.feature_extractor, input_size=(args['num_channels'], args['image_size'], args['image_size']), 
+			batch_size=args['batch_size'], device='cuda' if is_cuda else 'cpu')
+		file.write('\n')
+		file.write('\n')
+		file.write('\n ----------------------- Deep Kernel Parameters Summary ----------------------- \n')
+		print(list(model.named_parameters()))
+		file.write('\n')
 		sys.stdout = original_stdout # Reset the standard output to its original value
 	return
 

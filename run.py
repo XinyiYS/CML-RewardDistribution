@@ -34,7 +34,8 @@ class GaussianProcessLayer(gpytorch.models.ApproximateGP):
 			), num_tasks=num_dim,
 		)
 		super().__init__(variational_strategy)
-		
+
+
 		if covar_module:
 			self.covar_module = covar_module
 		else:
@@ -58,36 +59,47 @@ class GaussianProcessLayer(gpytorch.models.ApproximateGP):
 	def forward(self, x):
 		mean = self.mean_module(x)
 		covar = self.covar_module(x)
+		
 		return gpytorch.distributions.MultivariateNormal(mean, covar)
 
+
 class DKLModel(gpytorch.Module):
-	def __init__(self, feature_extractor, MLP_feature_extractor, gp_layer, num_dim=10, grid_bounds=(-10., 10.)):
+	def __init__(self, feature_extractor, MLP_feature_extractor, gp_layer=None, num_dim=10, grid_bounds=(-10., 10.),):
 		super(DKLModel, self).__init__()
 		self.feature_extractor = feature_extractor
 		self.MLP_feature_extractor = MLP_feature_extractor
-
 		self.gp_layer = gp_layer
 
-	def forward(self, x1, x2, pair, A=None, B=None, C=None):
-		features1 = self.get_vae_features(x1)
-		features2 = self.get_vae_features(x2)
+	def forward(self, x1, x2, A=None, B=None, C=None):
 
-		features1 = self.MLP_feature_extractor(features1)
-		features2 = self.MLP_feature_extractor(features2)
-		
-		# features1 = self.indi_feature_extractors[pair[0]](features1)
-		# features2 = self.indi_feature_extractors[pair[1]](features2)
-		mmd_2, Kxx_, Kxy, Kyy_ = mmd(features1.reshape(len(x1), -1), features2.reshape(len(x2), -1), k=self.gp_layer.covar_module)
+		features1 = self.extract_features(x1)
+		features2 = self.extract_features(x2)
+
+		mmd_2, t_stat = self.get_mmd(features1, features2)
+		# mmd_2, Kxx_, Kxy, Kyy_ = mmd(features1.reshape(len(x1), -1), features2.reshape(len(x2), -1), k=self.gp_layer.covar_module)
+		# t_stat = t_statistic(mmd_2, Kxx_, Kxy, Kyy_)
+		return mmd_2, t_stat
+
+	def get_mmd(self, features1, features2):
+		mmd_2, Kxx_, Kxy, Kyy_ = mmd(features1, features2, k=self.gp_layer.covar_module)
 		t_stat = t_statistic(mmd_2, Kxx_, Kxy, Kyy_)
 		return mmd_2, t_stat
-	
-	def get_vae_features(self, x):
+
+	def extract_features(self, x):
 		if 'CIFAR' in str(self.feature_extractor.__class__):
-			x_mu, x_logvar = self.feature_extractor.encode(x)
+			if 'CVAE' in str(self.feature_extractor.__class__):
+				x_mu, x_logvar = self.feature_extractor.encode(x)
+				features = self.feature_extractor.latent_sample(x_mu, x_logvar)
+			elif 'Featurizer' in str(self.feature_extractor.__class__):
+				features = self.feature_extractor(x)
 		else:
 			x_mu, x_logvar = self.feature_extractor.encoder(x)
-
-		return self.feature_extractor.latent_sample(x_mu, x_logvar)
+			features = self.feature_extractor.latent_sample(x_mu, x_logvar)
+		
+		if self.MLP_feature_extractor:
+			features = self.MLP_feature_extractor(features)
+		
+		return features.reshape(len(x), -1)
 
 def objective(args, model, optimizer, trial, train_loaders, test_loaders):
 
@@ -119,7 +131,7 @@ def objective(args, model, optimizer, trial, train_loaders, test_loaders):
 					if X.size(0) < 4 or Y.size(0) < 4: continue
 					# Too small a batch leftover, would cause the t-statistic to be undefined, so skip
 
-					mmd_hat, t_stat = model(X, Y, pair=[i, j])
+					mmd_hat, t_stat = model(X, Y)
 					if torch.isnan(t_stat):
 						print("t_stat is nan for {} vs {}, at {}-epoch".format(i, j, epoch+1))						
 						obj = mmd_hat
@@ -162,30 +174,41 @@ def construct_kernel(args):
 
 
 	# --------------- Feature extractor module ---------------
-
+	MLP_feature_extractor = None
 
 	# --------------- Shared Feature extractor module ---------------
 	if args['dataset'] == 'CIFAR10':
 		from models.CIFAR_CVAE import CIFAR_CVAE, load_pretrain
 		CVAE = CIFAR_CVAE(latent_dims=args['num_features'])
 		feature_extractor = load_pretrain(vae=CVAE, path='CIFAR10_CVAE/model_512d.pth') # latent dimension is 512
+		from models.feature_extractors import MLP
+		MLP_feature_extractor = MLP(args)
+
+		# from models.CIFAR_Featurizer import Featurizer
+		# feature_extractor = Featurizer()
+
 	else:
 		# MNIST
 		from models.CVAE import VariationalAutoencoder, load_pretrain
 		vae = load_pretrain()
 		feature_extractor = vae
 
-	# --------------- Individual layers after the Shared Feature extractor module ---------------
+		# --------------- Individual layers after the Shared Feature extractor module ---------------
 
-	# MLP feature extractor on top of the VAEs
-	from models.feature_extractors import MLP
-	MLP_feature_extractor = MLP(args)
+		# MLP feature extractor on top of the VAEs		
+		from models.feature_extractors import MLP
+		MLP_feature_extractor = MLP(args)
 
 	# --------------- Gaussian Process/Kernel module ---------------
 	grid_bounds=(-10., 10.)
 
 	# Should be the dimension of the output of the last layer of the feature extractor
-	(last_layer_index, last_layer) = list(MLP_feature_extractor._modules.items())[-1]
+	if MLP_feature_extractor:
+		(last_layer_index, last_layer) = list(MLP_feature_extractor._modules.items())[-1]
+	else:
+		last_layer = feature_extractor.adv_layer[0]
+
+
 	ard_num_dims = int(last_layer.out_features) if args['ard_num_dims'] else None
 
 	suggested_kernels = [getattr(gpytorch.kernels, base_kernel)(ard_num_dims=ard_num_dims,lengthscale_prior=gpytorch.priors.SmoothedBoxPrior(
@@ -193,10 +216,9 @@ def construct_kernel(args):
 	covar_module = ScaleKernel(AdditiveKernel(*suggested_kernels))
 	gp_layer = GaussianProcessLayer(covar_module=covar_module, num_dim=args['num_features'], grid_bounds=grid_bounds)
 
-
 	# --------------- Complete Deep Kernel ---------------
-	model = DKLModel(feature_extractor, MLP_feature_extractor, gp_layer)
 
+	model = DKLModel(feature_extractor, MLP_feature_extractor, gp_layer=gp_layer)
 
 	if torch.cuda.is_available():
 		model = model.cuda()
@@ -204,7 +226,7 @@ def construct_kernel(args):
 
 	# ---------- Optimizer and Scheduler ----------
 	optimizer = getattr(optim, args['optimizer'])([
-		{'params': model.feature_extractor.parameters(), 'lr': args['lr'] * 1e-2, 'weight_decay': 1e-4},
+		{'params': model.feature_extractor.parameters(), 'lr': args['lr'], 'weight_decay': 1e-4},
 		{'params': model.MLP_feature_extractor.parameters(),  'lr': args['lr'], 'weight_decay': 1e-4},
 		{'params': model.gp_layer.hyperparameters(), 'lr': args['lr'] * 0.1, 'weight_decay':1e-4},
 		{'params': model.gp_layer.variational_parameters(), 'weight_decay':1e-4},
@@ -224,17 +246,17 @@ def train_main(trial):
 	init_deterministic(args['noise_seed']) # comment this out for faster training
 
 	# ---------- Data setting ----------
-	args['dataset'] = 'MNIST'
+	args['dataset'] = 'CIFAR10'
 
 
 	args['split_mode'] = "custom" #@param ["disjointclasses","uniform"," classimbalance", "powerlaw", 'custom']
 	args['clses'] = [[0],[1],[6],[8],[9]] if args['dataset'] == 'CIFAR10' else None
-	args['clses'] = None
+	# args['clses'] = None
 
 	args['include_joint'] = True
 
 	n_participants = args['n_participants'] = 5
-	args['n_samples_per_participant'] = 2000 
+	args['n_samples_per_participant'] = 4000 
 	args['n_samples_per_participant_test'] = 1000
 	# args['class_sz_per_participant'] = 2
 	args['n_samples'] = args['n_participants'] * args['n_samples_per_participant']
@@ -260,15 +282,16 @@ def train_main(trial):
 	args['num_classes'] = 10
 
 	# ---------- Optuna ----------
-	args['epochs'] = trial.suggest_int("epochs", 10, 100, 10)
+	args['epochs'] = trial.suggest_int("epochs", 25, 200, 25)
 	# args['epochs'] = 0
 	args['batch_size'] = trial.suggest_int("batch_size", 256, 1024, 64)
+	# args['batch_size'] = trial.suggest_int("batch_size", 8, 16, 4)
 
-	args['optimizer'] = trial.suggest_categorical("optimizer", ["Adam", "SGD"])
+	args['optimizer'] = "Adam"
 	args['lr'] = trial.suggest_float("lr", 1e-5, 1e-1, log=True)
 
-	args['num_base_kernels'] = trial.suggest_int("num_base_kernels", 1, 2, 1)
-	args['base_kernels'] = [trial.suggest_categorical('kernel{}_name'.format(i+1), ['RBFKernel', 'MaternKernel']) for i in range(args['num_base_kernels'])]
+	args['num_base_kernels'] = 1
+	args['base_kernels'] = ['RBFKernel']
 
 	# ---------- Logging Directories ----------
 
