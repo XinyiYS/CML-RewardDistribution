@@ -7,6 +7,7 @@ import heapq
 import math
 import pickle
 import itertools
+import scipy
 from matplotlib import cm
 from multiprocessing import Pool
 from scipy.special import softmax
@@ -145,24 +146,41 @@ def perm_sampling_neg_biased(P, Q, k, num_perms=200, eta=1.0):
     return sorted(mmds)
 
 
-def get_q(sorted_vX, vN):
+def get_q(sorted_vX, vN, dist="skewnormal"):
     """
     :param sorted_vX: list of sorted v(X)
     :param vN: upper bound to truncate sorted_vX
     """
     
-    truncated_sorted_vX = []
-    for val in sorted_vX:
-        if val <= vN:
-            truncated_sorted_vX.append(val)
+    if dist == "discrete":
+        truncated_sorted_vX = []
+        for val in sorted_vX:
+            if val <= vN:
+                truncated_sorted_vX.append(val)
+
+        def q(alpha):
+            if alpha == 1:
+                return vN
+            else:
+                return truncated_sorted_vX[math.ceil(alpha * (len(truncated_sorted_vX) - 1))]
+
+        return q
     
-    def q(alpha):
-        if alpha == 1:
-            return vN
-        else:
-            return truncated_sorted_vX[math.ceil(alpha * (len(truncated_sorted_vX) - 1))]
-    
-    return q
+    elif dist == "skewnormal":
+        params = scipy.stats.skewnorm.fit(sorted_vX)
+        skewnormal_dist = scipy.stats.skewnorm(*params)
+        p_min = skewnormal_dist.cdf(0)
+        if p_min < 1e-10:
+            p_min = 1e-10
+        p_max = skewnormal_dist.cdf(vN)
+        
+        def q(alpha):
+            if alpha == 0:
+                return 0
+            else:
+                return skewnormal_dist.ppf((p_max - p_min) * alpha + p_min)
+        
+        return q
 
 
 def get_vCi(i, phi, v):
@@ -327,6 +345,9 @@ def weighted_sampling(candidates, D, mu_target, Y, kernel, greed, rel_tol=1e-03)
 
     with trange(m) as t1:
         for _ in t1:
+            if len(G) == 1:
+                break
+            
             t1.set_description("Additions with greed {}".format(greed))
             DuR = union(D, R)
                         
@@ -334,13 +355,16 @@ def weighted_sampling(candidates, D, mu_target, Y, kernel, greed, rel_tol=1e-03)
             deltas_temp = neg_mmds_new - mu
             weights = deltas_temp
             
-            weight_max = np.amax(weights)
-            weight_min = np.amin(weights)
-            weights = (weights - weight_min) / (weight_max - weight_min)  # Scale weights to [0, 1] because greed factor may not affect
-            # sampling for very small/large weight values
-
-            probs = softmax(greed * weights)
-            idx = np.random.choice(len(G), p=probs)
+            try:
+                weight_max = np.amax(weights)
+                weight_min = np.amin(weights)
+                weights = (weights - weight_min) / (weight_max - weight_min)  # Scale weights to [0, 1] because greed factor may not affect
+                # sampling for very small/large weight values
+                probs = softmax(greed * weights)
+                idx = np.random.choice(len(G), p=probs)
+            except:
+                print("An exception occurred in the weighted sampling block")
+                break
             
             x = G[idx:idx+1]
             delta = deltas_temp[idx]
@@ -354,11 +378,15 @@ def weighted_sampling(candidates, D, mu_target, Y, kernel, greed, rel_tol=1e-03)
             G = np.delete(G, idx, axis=0)
             t1.set_postfix(delta=str(delta), mu=str(mu), target=str(mu_target))
 
-            if mu > (1-rel_tol) * mu_target or len(G) == 0:  # Exit condition
+            if mu >= mu_target:  # Exit condition
                 break
-
+        
+#         if len(G) <= 1:  # Added all points and never reached target
+#             max_idx = np.argmax(mus)  # Get the index that achieved the maximum
+#             return R[:max_idx+1], deltas[:max_idx+1], mus[:max_idx+1]
+#         else:
     return R, deltas, mus
-            
+    
 
 def process_func(params):
     """
