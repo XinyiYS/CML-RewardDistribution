@@ -12,6 +12,7 @@ def MLP(args):
 			nn.Linear(128, 32)
 			) 
 
+
 	if args['dataset'] == 'MNIST':
 		return nn.Sequential(
 			nn.Linear(args['num_features'], args['num_features']), 

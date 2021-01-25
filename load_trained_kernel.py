@@ -5,13 +5,14 @@ from ast import literal_eval
 import torch
 
 from utils.utils import tabulate_dict, prepare_loaders, evaluate, init_deterministic, load_kernel
-from run import construct_kernel
+from run import construct_kernel as old_construct_kernel
+from new_run import construct_kernel as new_construct_kernel
 
 
 if __name__=='__main__':
 
 	# --------- Experiment dir
-	load_dir = 'MNIST/N2000-E30-B832' # 'CIFAR10/N4000-E30-B640'
+	load_dir = 'server_logs/CML/Specific_clses/Experiment_2021-01-06-17-11/N4000-E10-B512' # 'CIFAR10/N4000-E30-B640'
 
 	# --------- Read the kernel architecture hyperparameters
 	args = {} 
@@ -31,10 +32,11 @@ if __name__=='__main__':
 	init_deterministic(args['noise_seed']) # comment this out for faster runtime
 
 	# --------- Initialize the kernel, including initializing and loading pretrained weights for the shared feature extrator 
-	# try:
-		# kernel, _ = old_construct_kernel(args)
-	# except:
-	kernel, _ = new_construct_kernel(args)
+	try:
+		kernel, _ = old_construct_kernel(args)
+	except:
+		kernel, _ = new_construct_kernel(args)
+	
 	if torch.cuda.is_available():
 		kernel = kernel.cuda()
 
@@ -52,7 +54,8 @@ if __name__=='__main__':
 		train_loaders = [joint_loader] + train_loaders
 		test_loaders = [joint_test_loader] + test_loaders
 
-	mmd_dict, tstat_dict = evaluate(kernel, test_loaders, args, M=50, plot=True, logdir=test_logs_dir, figs_dir = oj(test_logs_dir, 'figs'))
+	scaling_alpha = 1e9
+	mmd_dict, tstat_dict = evaluate(kernel, test_loaders, args, M=50, plot=True, logdir=test_logs_dir, figs_dir = oj(test_logs_dir, 'figs'), alpha=scaling_alpha)
 
 	mmd_mean_table, mmd_std_table = tabulate_dict(mmd_dict, args['n_participants'] + int(args['include_joint']))
 	

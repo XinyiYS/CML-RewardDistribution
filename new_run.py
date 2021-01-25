@@ -262,7 +262,7 @@ def train_main(trial):
 	args['logdir'] = logdir
 	
 	write_model(model, logdir, args)	
-	sys.stdout = open(os.path.join(logdir, 'log'), "w")
+	# sys.stdout = open(os.path.join(logdir, 'log'), "w")
 
 
 	# --------------- Make use of multiple GPUs if available ---------------
