@@ -63,8 +63,6 @@ class GaussianProcessLayer(gpytorch.models.ApproximateGP):
 		return gpytorch.distributions.MultivariateNormal(mean, covar)
 
 
-
-
 class DKLModel(gpytorch.Module):
 	def __init__(self, feature_extractor, MLP_feature_extractor, gp_layer=None, num_dim=10, grid_bounds=(-10., 10.),):
 		super(DKLModel, self).__init__()
@@ -73,29 +71,30 @@ class DKLModel(gpytorch.Module):
 		self.gp_layer = gp_layer
 
 	def forward(self, x1, x2, A=None, B=None, C=None):
+
 		features1 = self.extract_features(x1)
 		features2 = self.extract_features(x2)
-
-		if self.MLP_feature_extractor:
-			features1 = self.MLP_feature_extractor(features1)
-			features2 = self.MLP_feature_extractor(features2)
-
 
 
 		mmd_2, Kxx_, Kxy, Kyy_ = mmd(features1.reshape(len(x1), -1), features2.reshape(len(x2), -1), k=self.gp_layer.covar_module)
 		t_stat = t_statistic(mmd_2, Kxx_, Kxy, Kyy_)
 		return mmd_2, t_stat
-	
+
 	def extract_features(self, x):
 		if 'CIFAR' in str(self.feature_extractor.__class__):
 			if 'CVAE' in str(self.feature_extractor.__class__):
 				x_mu, x_logvar = self.feature_extractor.encode(x)
+				features = self.feature_extractor.latent_sample(x_mu, x_logvar)
 			elif 'Featurizer' in str(self.feature_extractor.__class__):
-				return self.feature_extractor(x)
+				features = self.feature_extractor(x)
 		else:
 			x_mu, x_logvar = self.feature_extractor.encoder(x)
-
-		return self.feature_extractor.latent_sample(x_mu, x_logvar)
+			features = self.feature_extractor.latent_sample(x_mu, x_logvar)
+		
+		if self.MLP_feature_extractor:
+			features = self.MLP_feature_extractor(features)
+		
+		return features
 
 def objective(args, model, optimizer, trial, train_loaders, test_loaders):
 
@@ -254,7 +253,7 @@ def train_main(trial):
 	args['include_joint'] = True
 
 	n_participants = args['n_participants'] = 5
-	args['n_samples_per_participant'] = 2000 
+	args['n_samples_per_participant'] = 4000 
 	args['n_samples_per_participant_test'] = 1000
 	# args['class_sz_per_participant'] = 2
 	args['n_samples'] = args['n_participants'] * args['n_samples_per_participant']

@@ -196,7 +196,8 @@ def prepare_loaders(args, repeat=False):
 	train_indices_list = split(args['n_samples'], args['n_participants'], train_dataset=train_dataset, mode=args['split_mode'], class_sz = class_sz, clses=clses)
 
 	print("Preparing test  data indices:")
-	test_indices_list = split(args['n_samples_test'], args['n_participants'], train_dataset=test_dataset, mode=args['split_mode'], class_sz = class_sz, clses=clses)
+	n_samples_test = args['n_samples_test'] if 'n_samples_test' in args else len(test_dataset)
+	test_indices_list = split(n_samples_test, args['n_participants'], train_dataset=test_dataset, mode=args['split_mode'], class_sz = class_sz, clses=clses)
 
 	shuffle = True
 	if shuffle:

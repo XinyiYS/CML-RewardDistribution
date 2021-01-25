@@ -5,9 +5,11 @@ import torch.nn.functional as F
 def MLP(args):
 	if args['dataset'] == 'CIFAR10':
 		return nn.Sequential(
-			nn.Linear(args['num_features'], 64), 
+			nn.Linear(args['num_features'], 256), 
 			nn.Sigmoid(),
-			nn.Linear(64, 16)
+			nn.Linear(256, 128),
+			nn.Sigmoid(),
+			nn.Linear(128, 32)
 			) 
 
 	if args['dataset'] == 'MNIST':
