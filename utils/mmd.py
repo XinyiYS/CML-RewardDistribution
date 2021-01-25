@@ -199,24 +199,24 @@ def t_statistic(mmd_2, Kxx_, Kxy, Kyy_, _eps=1e-8):
 
 	return torch.div(mmd_2, torch.sqrt(torch.max(vhat, torch.tensor(_eps, device=vhat.device))))
 
-# def mmd(X, Y, k):
-#     """
-#     Calculates unbiased MMD^2. A, B and C are the pairwise-XX, pairwise-XY, pairwise-YY summation terms respectively.
-#     :param X: array of shape (n, d)
-#     :param Y: array of shape (m, d)
-#     :param k: GPyTorch kernel
-#     :return: MMD^2, A, B, C
-#     """
-#     n = X.shape[0]
-#     m = Y.shape[0]
-#     X_tens = torch.tensor(X)
-#     Y_tens = torch.tensor(Y)
+def mmd_np(X, Y, k):
+     """
+     Calculates unbiased MMD^2. A, B and C are the pairwise-XX, pairwise-XY, pairwise-YY summation terms respectively.
+     :param X: array of shape (n, d)
+     :param Y: array of shape (m, d)
+     :param k: GPyTorch kernel
+     :return: MMD^2, A, B, C
+     """
+     n = X.shape[0]
+     m = Y.shape[0]
+     X_tens = torch.tensor(X)
+     Y_tens = torch.tensor(Y)
 
-#     A = (1 / (n * (n - 1))) * (torch.sum(k(X_tens).evaluate()) - torch.sum(torch.diag(k(X_tens).evaluate())))
-#     B = -(2 / (n * m)) * torch.sum(k(X_tens, Y_tens).evaluate())
-#     C = (1 / (m * (m - 1))) * (torch.sum(k(Y_tens).evaluate()) - torch.sum(torch.diag(k(Y_tens).evaluate())))
+     A = (1 / (n * (n - 1))) * (torch.sum(k(X_tens).evaluate()) - torch.sum(torch.diag(k(X_tens).evaluate())))
+     B = -(2 / (n * m)) * torch.sum(k(X_tens, Y_tens).evaluate())
+     C = (1 / (m * (m - 1))) * (torch.sum(k(Y_tens).evaluate()) - torch.sum(torch.diag(k(Y_tens).evaluate())))
 
-#     return (A + B + C).item(), A.item(), B.item(), C.item()
+     return (A + B + C).item(), A.item(), B.item(), C.item()
 
 
 def mmd(X, Y, k):
@@ -232,21 +232,31 @@ def mmd(X, Y, k):
 	n = X.shape[0]
 	m = Y.shape[0]
 
-	X_tens = X.clone().detach().requires_grad_(True)
-	Y_tens = Y.clone().detach().requires_grad_(True)
-				
-	A = (1 / (n * (n - 1))) * (torch.sum(k(X_tens).evaluate()) - torch.sum(torch.diag(k(X_tens).evaluate())))
-	B = -(2 / (n * m)) * torch.sum(k(X_tens, Y_tens).evaluate())
-	C = (1 / (m * (m - 1))) * (torch.sum(k(Y_tens).evaluate()) - torch.sum(torch.diag(k(Y_tens).evaluate())))
+  if torch.is_tensor(X) and torch.is_tensor(Y):
+      X_tens = X.clone().detach().requires_grad_(True)
+      Y_tens = Y.clone().detach().requires_grad_(True)
 
-	Kxy  = k(X_tens, Y_tens).evaluate()
-	Kxx_ = k(X_tens, X_tens).evaluate()
-	Kxx_.fill_diagonal_(0)
-	
-	Kyy_ = k(Y_tens, Y_tens).evaluate()
-	Kyy_.fill_diagonal_(0)
+      A = (1 / (n * (n - 1))) * (torch.sum(k(X_tens).evaluate()) - torch.sum(torch.diag(k(X_tens).evaluate())))
+      B = -(2 / (n * m)) * torch.sum(k(X_tens, Y_tens).evaluate())
+      C = (1 / (m * (m - 1))) * (torch.sum(k(Y_tens).evaluate()) - torch.sum(torch.diag(k(Y_tens).evaluate())))
 
-	return (A + B + C), Kxx_, Kxy, Kyy_
+      Kxy  = k(X_tens, Y_tens).evaluate()
+      Kxx_ = k(X_tens, X_tens).evaluate()
+      Kxx_.fill_diagonal_(0)
+
+      Kyy_ = k(Y_tens, Y_tens).evaluate()
+      Kyy_.fill_diagonal_(0)
+
+      return (A + B + C), Kxx_, Kxy, Kyy_
+  else:
+      X_tens = torch.tensor(X)
+      Y_tens = torch.tensor(Y)
+
+      A = (1 / (n * (n - 1))) * (torch.sum(k(X_tens).evaluate()) - torch.sum(torch.diag(k(X_tens).evaluate())))
+      B = -(2 / (n * m)) * torch.sum(k(X_tens, Y_tens).evaluate())
+      C = (1 / (m * (m - 1))) * (torch.sum(k(Y_tens).evaluate()) - torch.sum(torch.diag(k(Y_tens).evaluate())))
+
+      return (A + B + C).item(), A.item(), B.item(), C.item()
 
 
 
