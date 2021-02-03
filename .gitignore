@@ -1,8 +1,7 @@
 *.pyc*
 .idea
 *.ipynb_checkpoints*
-data
-.data*
+data/datasets
 *logs/*
 *figs*
 *.pth

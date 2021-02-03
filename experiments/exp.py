@@ -1,4 +1,5 @@
 from sacred import Experiment
+import numpy as np
 
 ex = Experiment("CGM")
 
@@ -13,17 +14,16 @@ def params():
     num_classes = 10
     d = 2
     party_data_size = 1000
-    params = {"dataset": dataset,
-              "split": split,
-              "greed": greed,
-              "condition": condition,
-              "num_parties": num_parties,
-              "num_classes": num_classes,
-              "d": d,
-              "party_data_size": party_data_size}
-    message = "Running with parameters {}".format(params)
+    candidate_data_size = 10000
+    unequal_prop = np.array([[0.2, 0.2, 0.2, 0.2, 0.2],
+                             [0.2, 0.2, 0.2, 0.2, 0.2],
+                             [0.6, 0.4, 0.0, 0.0, 0.0],
+                             [0.0, 0.2, 0.6, 0.2, 0.0],
+                             [0.0, 0.0, 0.0, 0.4, 0.6]])
 
 
 @ex.automain
-def main(message, dataset, split, greed, condition, num_parties, num_classes, d, party_data_size):
-    print(message)
+def main(dataset, split, greed, condition, num_parties, num_classes, d, party_data_size,
+         candidate_data_size, unequal_prop):
+    args = dict(sorted(locals().items()))
+    print("Running with parameters {}".format(args))
