@@ -8,8 +8,8 @@ from core.utils import mmd_neg_biased, union
 
 def v_update_batch(x, X, Y, S_X, S_XY, k):
     """
-    Calculates v when we add a batch of points to a set with an already calculated v. Updating one point like this takes linear time instead of quadratic time by naively
-    redoing the entire calculation.
+    Calculates v when we add a batch of points to a set with an already calculated v. Updating one point like this takes
+    linear time instead of quadratic time by naively redoing the entire calculation.
     :param x: vector of shape (z, d)
     :param X: array of shape (n, d)
     :param Y: array of shape (m, d)
@@ -62,9 +62,8 @@ def weighted_sampling(candidates, D, mu_target, Y, kernel, greed, rel_tol=1e-03)
         try:
             weight_max = np.amax(weights)
             weight_min = np.amin(weights)
-            weights = (weights - weight_min) / (
-                        weight_max - weight_min)  # Scale weights to [0, 1] because greed factor may not affect
-            # sampling for very small/large weight values
+            weights = (weights - weight_min) / (weight_max - weight_min)  # Scale weights to [0, 1] because
+            # greed factor may not affect sampling for very small/large weight values
             probs = softmax(greed * weights)
             idx = np.random.choice(len(G), p=probs)
         except:

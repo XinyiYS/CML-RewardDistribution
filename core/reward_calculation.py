@@ -1,7 +1,7 @@
 import numpy as np
 import math
 import itertools
-import scipy
+import scipy.stats
 
 from core.utils import mmd_neg_biased
 
@@ -156,14 +156,14 @@ def get_eta_q(vN, alpha, v_is, phi, v, perm_samp_dataset, reference_dataset, ker
     elif mode == "stable":
         condition = stable_condition
 
-    # Check high
+    print("Checking high value of eta")
     eta = high
     sorted_vX = perm_sampling_neg_biased(perm_samp_dataset, reference_dataset, kernel, num_perms=200, eta=eta)
     q = get_q(sorted_vX, vN)
     if not condition(q):
         raise ValueError("High value of eta already violates {} condition".format(mode))
 
-    # Check low
+    print("Checking low value of eta")
     eta = low
     sorted_vX = perm_sampling_neg_biased(perm_samp_dataset, reference_dataset, kernel, num_perms=200, eta=eta)
     q = get_q(sorted_vX, vN)
