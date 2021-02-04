@@ -1,5 +1,4 @@
 import numpy as np
-from tqdm.notebook import trange
 import math
 import itertools
 import scipy
@@ -82,7 +81,7 @@ def perm_sampling_neg_biased(P, Q, k, num_perms=200, eta=1.0):
     mmds = []
     num_samples = int(eta * P.shape[0])
 
-    for _ in trange(num_perms, desc="Permutation sampling"):
+    for _ in range(num_perms):
         p = np.random.permutation(len(P))
         X = P[p[:num_samples]]
         Y = Q

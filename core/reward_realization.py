@@ -1,6 +1,5 @@
 import numpy as np
 import torch
-from tqdm.notebook import trange
 from multiprocessing import Pool
 from scipy.special import softmax
 
@@ -51,49 +50,41 @@ def weighted_sampling(candidates, D, mu_target, Y, kernel, greed, rel_tol=1e-03)
     mus.append(mu)
     G = candidates.copy()
 
-    with trange(m) as t1:
-        for _ in t1:
-            if len(G) == 1:
-                break
+    for _ in range(m):
+        if len(G) == 1:
+            break
 
-            t1.set_description("Additions with greed {}".format(greed))
-            DuR = union(D, R)
+        DuR = union(D, R)
+        neg_mmds_new, S_Xs_temp, S_XYs_temp = v_update_batch(G, DuR, Y, S_X, S_XY, kernel)
+        deltas_temp = neg_mmds_new - mu
+        weights = deltas_temp
 
-            neg_mmds_new, S_Xs_temp, S_XYs_temp = v_update_batch(G, DuR, Y, S_X, S_XY, kernel)
-            deltas_temp = neg_mmds_new - mu
-            weights = deltas_temp
+        try:
+            weight_max = np.amax(weights)
+            weight_min = np.amin(weights)
+            weights = (weights - weight_min) / (
+                        weight_max - weight_min)  # Scale weights to [0, 1] because greed factor may not affect
+            # sampling for very small/large weight values
+            probs = softmax(greed * weights)
+            idx = np.random.choice(len(G), p=probs)
+        except:
+            print("An exception occurred in the weighted sampling block")
+            break
 
-            try:
-                weight_max = np.amax(weights)
-                weight_min = np.amin(weights)
-                weights = (weights - weight_min) / (
-                            weight_max - weight_min)  # Scale weights to [0, 1] because greed factor may not affect
-                # sampling for very small/large weight values
-                probs = softmax(greed * weights)
-                idx = np.random.choice(len(G), p=probs)
-            except:
-                print("An exception occurred in the weighted sampling block")
-                break
+        x = G[idx:idx + 1]
+        delta = deltas_temp[idx]
+        mu += delta
+        deltas.append(delta)
+        mus.append(mu)
+        S_X = S_Xs_temp[idx]
+        S_XY = S_XYs_temp[idx]
 
-            x = G[idx:idx + 1]
-            delta = deltas_temp[idx]
-            mu += delta
-            deltas.append(delta)
-            mus.append(mu)
-            S_X = S_Xs_temp[idx]
-            S_XY = S_XYs_temp[idx]
+        R.append(np.squeeze(x).copy())
+        G = np.delete(G, idx, axis=0)
 
-            R.append(np.squeeze(x).copy())
-            G = np.delete(G, idx, axis=0)
-            t1.set_postfix(delta=str(delta), mu=str(mu), target=str(mu_target))
+        if mu >= mu_target:  # Exit condition
+            break
 
-            if mu >= mu_target:  # Exit condition
-                break
-
-    #         if len(G) <= 1:  # Added all points and never reached target
-    #             max_idx = np.argmax(mus)  # Get the index that achieved the maximum
-    #             return R[:max_idx+1], deltas[:max_idx+1], mus[:max_idx+1]
-    #         else:
     return R, deltas, mus
 
 
