@@ -6,3 +6,4 @@ data/datasets
 *figs*
 *.pth
 a.py
+runs

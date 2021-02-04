@@ -1,6 +1,6 @@
 import numpy as np
 from data.GMM import sample_GMM
-from core.cgm import split_proportions
+from core.utils import split_proportions
 
 
 def get_proportions(split, num_parties, unequal_prop):
@@ -31,27 +31,22 @@ def get_data(dataset, num_classes, d, num_parties, party_data_size, candidate_da
         candidate_datasets = np.array([gmm_points]*num_parties)
 
         # Reference dataset
-        reference_datasets = np.concatenate([party_datasets, candidate_datasets[0]], axis=0)
+        alL_parties_dataset = np.concatenate(party_datasets)
+        reference_dataset = np.concatenate([alL_parties_dataset, candidate_datasets[0]], axis=0)
+
     elif dataset == 'MNIST':
         party_datasets = []
-        reference_datasets = []
+        reference_dataset = []
         candidate_datasets = []
+        candidate_labels = []
+
     elif dataset == 'CIFAR':
         party_datasets = []
-        reference_datasets = []
+        reference_dataset = []
         candidate_datasets = []
+        candidate_labels = []
+
     else:
         raise Exception("Parameter dataset must be 'GMM', 'MNIST', or 'CIFAR'")
-    return party_datasets, reference_datasets, candidate_datasets, candidate_labels
 
-
-def get_kernel(dataset):
-    if dataset == 'GMM':
-        kernel = None
-    elif dataset == 'MNIST':
-        kernel = None
-    elif dataset == 'CIFAR':
-        kernel = None
-    else:
-        raise Exception("Parameter dataset must be 'GMM', 'MNIST', or 'CIFAR'")
-    return kernel
+    return party_datasets, reference_dataset, candidate_datasets, candidate_labels
