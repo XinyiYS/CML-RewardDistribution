@@ -40,7 +40,7 @@ def main(dataset, split, greed, condition, num_parties, num_classes, d, party_da
     args = dict(sorted(locals().items()))
     print("Running with parameters {}".format(args))
     run_id = ex.current_run._id
-
+    
     # Setup data and kernel
     party_datasets, reference_dataset, candidate_datasets, candidate_labels = get_data(dataset,
                                                                                        num_classes,
@@ -88,8 +88,9 @@ def main(dataset, split, greed, condition, num_parties, num_classes, d, party_da
 
     # Save results
     pickle.dump((party_datasets, reference_dataset, candidate_datasets, candidate_labels, rewards, deltas, mus),
-                open("runs/{}/results/CGM-{}-{}-greed{}-{}.p".format(run_id,
-                                                                     dataset,
-                                                                     split,
-                                                                     greed,
-                                                                     condition), "wb"))
+                open("runs/{}/CGM-{}-{}-greed{}-{}.p".format(run_id,
+                                                             dataset,
+                                                             split,
+                                                             greed,
+                                                             condition), "wb"))
+
