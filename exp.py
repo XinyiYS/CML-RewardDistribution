@@ -93,4 +93,6 @@ def main(dataset, split, greed, condition, num_parties, num_classes, d, party_da
                                                              split,
                                                              greed,
                                                              condition), "wb"))
-
+    
+    print("Results saved successfully")
+    print("Length of rewards: {}".format([len(r) for r in rewards]))
