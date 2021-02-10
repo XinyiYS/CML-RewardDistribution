@@ -12,21 +12,31 @@ def union(D, R):
 def split_proportions(dataset, proportions):
     """
     :param dataset: array of shape (num_classes, N, d).
-    :param proportions: array of probability simplices of shape (num_classes, num_classes). Must sum to 1 along
+    :param proportions: array of probability simplices of shape (num_parties, num_classes). Must sum to 1 along
     all rows and columns
+    :return: party_datasets array of shape (num_parties, N, d), party_labels array of shape(num_parties, N)
     """
     num_classes, N, d = dataset.shape
-    split_datasets = [[] for i in range(num_classes)]
-    dataset_idx = [0 for i in range(num_classes)]
+    num_parties = proportions.shape[0]
+    split_datasets = [[] for _ in range(num_parties)]
+    split_labels = [[] for _ in range(num_parties)]
+    dataset_idx = [0 for _ in range(num_classes)]
 
-    for i in range(num_classes):
+    for i in range(num_parties):
         for j in range(num_classes):
             prop = proportions[i, j]
-            for k in range(int(prop * N)):
+            for _ in range(int(prop * N)):
                 split_datasets[i].append(dataset[j, dataset_idx[j]])
+                split_labels[i].append(j)
                 dataset_idx[j] += 1
-
-    return np.array(split_datasets)
+                
+    # Constrain all datasets to have the same length            
+    min_length = min(len(ds) for ds in split_datasets)
+    for i in range(num_parties): 
+        split_datasets[i] = split_datasets[i][:min_length]  
+        split_labels[i] = split_labels[i][:min_length]
+        
+    return np.array(split_datasets), np.array(split_labels)
 
 
 def mmd_neg_biased(X, Y, k):

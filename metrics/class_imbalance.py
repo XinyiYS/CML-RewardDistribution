@@ -35,8 +35,7 @@ def class_proportion(classes, num_classes):
     :return: tuple of (proportions, imbalance_score). proportions is a k-simplex where k is number of classes,
     imbalance_score is float scalar indicating level of imbalance between classes
     """
-    proportions = np.bincount(classes) / len(classes)
+    proportions = np.bincount(classes, minlength=num_classes) / len(classes)
     imbalance_score = 1/num_classes * np.dot(proportions, proportions)
     
     return proportions, imbalance_score
-

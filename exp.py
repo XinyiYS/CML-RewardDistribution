@@ -43,14 +43,14 @@ def main(dataset, split, greed, condition, num_parties, num_classes, d, party_da
     run_id = ex.current_run._id
     
     # Setup data and kernel
-    party_datasets, reference_dataset, candidate_datasets, candidate_labels = get_data(dataset,
-                                                                                       num_classes,
-                                                                                       d,
-                                                                                       num_parties,
-                                                                                       party_data_size,
-                                                                                       candidate_data_size,
-                                                                                       split,
-                                                                                       unequal_prop)
+    party_datasets, party_labels, reference_dataset, candidate_datasets, candidate_labels = get_data(dataset,
+                                                                                            num_classes,
+                                                                                            d,
+                                                                                            num_parties,
+                                                                                            party_data_size,
+                                                                                            candidate_data_size,
+                                                                                            split,
+                                                                                            unequal_prop)
 
     kernel = get_kernel(dataset, d)
 
@@ -88,7 +88,7 @@ def main(dataset, split, greed, condition, num_parties, num_classes, d, party_da
                                               rel_tol=1e-5)
 
     # Save results
-    pickle.dump((party_datasets, reference_dataset, candidate_datasets, candidate_labels, rewards, deltas, mus),
+    pickle.dump((party_datasets, party_labels, reference_dataset, candidate_datasets, candidate_labels, rewards, deltas, mus),
                 open("runs/{}/CGM-{}-{}-greed{}-{}.p".format(run_id,
                                                              dataset,
                                                              split,

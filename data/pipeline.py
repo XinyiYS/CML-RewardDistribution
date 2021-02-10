@@ -24,7 +24,7 @@ def get_data(dataset, num_classes, d, num_parties, party_data_size, candidate_da
         for i in range(num_classes):
             data_in_classes[i] = np.random.multivariate_normal(means[i], covs[i], size=(num_samples), check_valid='raise')
         prop = get_proportions(split, num_parties, unequal_prop)
-        party_datasets = split_proportions(data_in_classes, prop)
+        party_datasets, party_labels = split_proportions(data_in_classes, prop)
 
         # Candidate datasets
         gmm_points, candidate_labels = sample_GMM(means, covs, candidate_data_size)
@@ -49,4 +49,4 @@ def get_data(dataset, num_classes, d, num_parties, party_data_size, candidate_da
     else:
         raise Exception("Parameter dataset must be 'GMM', 'MNIST', or 'CIFAR'")
 
-    return party_datasets, reference_dataset, candidate_datasets, candidate_labels
+    return party_datasets, party_labels, reference_dataset, candidate_datasets, candidate_labels
