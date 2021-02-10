@@ -96,3 +96,9 @@ def main(dataset, split, greed, condition, num_parties, num_classes, d, party_da
     
     print("Results saved successfully")
     print("Length of rewards: {}".format([len(r) for r in rewards]))
+    
+    class_props = []
+    for result in rewards:
+        class_props.append(class_proportion(get_classes(np.array(result), candidate_datasets[0], candidate_labels), num_classes))
+    print("Class proportions and class imbalance: {}".format(class_props))
+    

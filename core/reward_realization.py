@@ -49,6 +49,9 @@ def weighted_sampling(candidates, D, mu_target, Y, kernel, greed, rel_tol=1e-03)
     mu, S_X, S_XY, S_Y = mmd_neg_biased(D, Y, kernel)
     mus.append(mu)
     G = candidates.copy()
+    
+    mu_max = mu
+    time_since_mu_max_update = 0
 
     for _ in range(m):
         if len(G) == 1:
@@ -80,6 +83,15 @@ def weighted_sampling(candidates, D, mu_target, Y, kernel, greed, rel_tol=1e-03)
 
         R.append(np.squeeze(x).copy())
         G = np.delete(G, idx, axis=0)
+        
+        if mu > mu_max:
+            mu_max = mu
+            time_since_mu_max_update = 0
+        else:
+            time_since_mu_max_update += 1
+            if time_since_mu_max_update >= 0.1 * len(candidates):
+                print("Early stopping, no increment for a long time")
+                break
 
         if mu >= mu_target:  # Exit condition
             break
