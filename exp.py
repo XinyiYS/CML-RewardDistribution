@@ -8,6 +8,7 @@ from core.kernel import get_kernel
 from core.reward_calculation import get_v, shapley, get_vN, get_v_is, get_eta_q
 from core.reward_realization import reward_realization
 from core.utils import norm
+from metrics.class_imbalance import get_classes, class_proportion
 
 ex = Experiment("CGM")
 ex.observers.append(FileStorageObserver('runs'))
@@ -101,4 +102,3 @@ def main(dataset, split, greed, condition, num_parties, num_classes, d, party_da
     for result in rewards:
         class_props.append(class_proportion(get_classes(np.array(result), candidate_datasets[0], candidate_labels), num_classes))
     print("Class proportions and class imbalance: {}".format(class_props))
-    
