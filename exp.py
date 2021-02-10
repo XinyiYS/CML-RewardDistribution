@@ -14,13 +14,14 @@ ex = Experiment("CGM")
 ex.observers.append(FileStorageObserver('runs'))
 
 
-@ex.config
-def params():
+@ex.named_config
+def gmm():
     dataset = "gmm"
-    split = "equaldisjoint"  # "equaldisjoint" or "unequal"
+    split = "unequal"  # "equaldisjoint" or "unequal"
     greed = 2
     condition = "stable"
     num_parties = 5
+    num_classes = 5
     d = 2  # Only for GMM
     party_data_size = 1000
     candidate_data_size = 10000
@@ -28,10 +29,37 @@ def params():
     perm_samp_low = 0.001
     perm_samp_iters = 8
 
-    if dataset == 'gmm':
-        num_classes = 5
-    else:
-        num_classes = 10
+
+@ex.named_config
+def mnist():
+    dataset = "mnist"
+    split = "unequal"  # "equaldisjoint" or "unequal"
+    greed = 2
+    condition = "stable"
+    num_parties = 5
+    num_classes = 10
+    d = 2  # Only for GMM
+    party_data_size = 5000
+    candidate_data_size = 10000
+    perm_samp_high = 0.4
+    perm_samp_low = 0.001
+    perm_samp_iters = 8
+
+
+@ex.named_config
+def cifar():
+    dataset = "cifar"
+    split = "unequal"  # "equaldisjoint" or "unequal"
+    greed = 2
+    condition = "stable"
+    num_parties = 5
+    num_classes = 10
+    d = 2  # Only for GMM
+    party_data_size = 5000
+    candidate_data_size = 10000
+    perm_samp_high = 0.4
+    perm_samp_low = 0.001
+    perm_samp_iters = 8
 
 
 @ex.automain
@@ -91,10 +119,10 @@ def main(dataset, split, greed, condition, num_parties, num_classes, d, party_da
                                                              split,
                                                              greed,
                                                              condition), "wb"))
-    
+
     print("Results saved successfully")
     print("Length of rewards: {}".format([len(r) for r in rewards]))
-    
+
     class_props = []
     for result in rewards:
         class_props.append(class_proportion(get_classes(np.array(result), candidate_datasets[0], candidate_labels), num_classes))
