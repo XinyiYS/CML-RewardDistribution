@@ -1,17 +1,37 @@
 import numpy as np
 from data.GMM import sample_GMM
-from core.utils import split_proportions
+from core.utils import split_proportions, split_data_into_classes
 
 
-def get_proportions(split, num_parties, unequal_prop):
-    if split == 'equaldisjoint':
-        return np.eye(num_parties)
-    elif split == 'unequal':
-        return unequal_prop
+def get_proportions(split, dataset):
+    if dataset == 'gmm': # WARNING: implicitly assumes 5 parties and 5 classes
+        if split == 'equaldisjoint':
+            return np.eye(5)
+        elif split == 'unequal':
+            return np.array([[0.2, 0.2, 0.2, 0.2, 0.2],
+                             [0.2, 0.2, 0.2, 0.2, 0.2],
+                             [0.6, 0.4, 0.0, 0.0, 0.0],
+                             [0.0, 0.2, 0.6, 0.2, 0.0],
+                             [0.0, 0.0, 0.0, 0.4, 0.6]])
+    elif dataset == 'mnist' or dataset == 'cifar': # WARNING: implicitly assumes 5 parties and 10 classes
+        if split == 'equaldisjoint':
+            return np.array([[0.5, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                             [0.0, 0.0, 0.5, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                             [0.0, 0.0, 0.0, 0.0, 0.5, 0.5, 0.0, 0.0, 0.0, 0.0],
+                             [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.5, 0.0, 0.0],
+                             [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.5]])
+        elif split == 'unequal':
+            return np.array([[0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
+                             [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
+                             [0.3, 0.3, 0.2, 0.2, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                             [0.0, 0.0, 0.1, 0.1, 0.3, 0.3, 0.1, 0.1, 0.0, 0.0],
+                             [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.2, 0.2, 0.3, 0.3]])
 
 
-def get_data(dataset, num_classes, d, num_parties, party_data_size, candidate_data_size, split, unequal_prop):
-    if dataset == 'GMM':
+def get_data(dataset, num_classes, d, num_parties, party_data_size, candidate_data_size, split):
+    prop = get_proportions(split, dataset)
+
+    if dataset == 'gmm':
         np.random.seed(2)
         means = np.random.uniform(size=(num_classes, d))
         covs = np.zeros((num_classes, d, d))
@@ -23,30 +43,34 @@ def get_data(dataset, num_classes, d, num_parties, party_data_size, candidate_da
         data_in_classes = np.zeros((num_classes, num_samples, d))
         for i in range(num_classes):
             data_in_classes[i] = np.random.multivariate_normal(means[i], covs[i], size=(num_samples), check_valid='raise')
-        prop = get_proportions(split, num_parties, unequal_prop)
         party_datasets, party_labels = split_proportions(data_in_classes, prop)
 
         # Candidate datasets
         gmm_points, candidate_labels = sample_GMM(means, covs, candidate_data_size)
-        candidate_datasets = np.array([gmm_points]*num_parties)
+        candidate_datasets = np.array([gmm_points] * num_parties)
 
         # Reference dataset
-        alL_parties_dataset = np.concatenate(party_datasets)
-        reference_dataset = np.concatenate([alL_parties_dataset, candidate_datasets[0]], axis=0)
+        all_parties_dataset = np.concatenate(party_datasets)
+        reference_dataset = np.concatenate([all_parties_dataset, candidate_datasets[0]], axis=0)
 
-    elif dataset == 'MNIST':
-        party_datasets = []
-        reference_dataset = []
-        candidate_datasets = []
-        candidate_labels = []
+    elif dataset == 'mnist' or dataset == 'cifar':
+        train_features = np.load("data/{}/{}_train_features.npy".format(dataset, dataset))
+        train_labels = np.load("data/{}/{}_train_labels.npy".format(dataset, dataset))
+        candidate_features = np.load("data/{}/{}_hF_features.npy".format(dataset, dataset))
+        candidate_labels = np.load("data/{}/{}_samples_labels.npy".format(dataset, dataset))
 
-    elif dataset == 'CIFAR':
-        party_datasets = []
-        reference_dataset = []
-        candidate_datasets = []
-        candidate_labels = []
+        # Party datasets
+        data_in_classes = split_data_into_classes(train_features, train_labels, num_classes)
+        party_datasets, party_labels = split_proportions(data_in_classes, prop, party_data_size)
+
+        # Candidate datasets
+        candidate_datasets = np.array([candidate_features[:candidate_data_size]] * num_parties)
+
+        # Reference dataset
+        all_parties_dataset = np.concatenate(party_datasets)
+        reference_dataset = np.concatenate([all_parties_dataset, candidate_datasets[0]], axis=0)
 
     else:
-        raise Exception("Parameter dataset must be 'GMM', 'MNIST', or 'CIFAR'")
+        raise Exception("Parameter dataset must be 'gmm', 'mnist', or 'cifar'")
 
     return party_datasets, party_labels, reference_dataset, candidate_datasets, candidate_labels

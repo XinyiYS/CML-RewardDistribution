@@ -16,28 +16,27 @@ ex.observers.append(FileStorageObserver('runs'))
 
 @ex.config
 def params():
-    dataset = "GMM"
-    split = "unequal"  # "equaldisjoint" or "unequal"
+    dataset = "gmm"
+    split = "equaldisjoint"  # "equaldisjoint" or "unequal"
     greed = 2
     condition = "stable"
     num_parties = 5
-    num_classes = 5
-    d = 2
+    d = 2  # Only for GMM
     party_data_size = 1000
     candidate_data_size = 10000
     perm_samp_high = 0.4
     perm_samp_low = 0.001
     perm_samp_iters = 8
-    unequal_prop = np.array([[0.2, 0.2, 0.2, 0.2, 0.2],
-                             [0.2, 0.2, 0.2, 0.2, 0.2],
-                             [0.6, 0.4, 0.0, 0.0, 0.0],
-                             [0.0, 0.2, 0.6, 0.2, 0.0],
-                             [0.0, 0.0, 0.0, 0.4, 0.6]])
+
+    if dataset == 'gmm':
+        num_classes = 5
+    else:
+        num_classes = 10
 
 
 @ex.automain
 def main(dataset, split, greed, condition, num_parties, num_classes, d, party_data_size,
-         candidate_data_size, perm_samp_high, perm_samp_low, perm_samp_iters, unequal_prop):
+         candidate_data_size, perm_samp_high, perm_samp_low, perm_samp_iters):
     args = dict(sorted(locals().items()))
     print("Running with parameters {}".format(args))
     run_id = ex.current_run._id
@@ -49,9 +48,7 @@ def main(dataset, split, greed, condition, num_parties, num_classes, d, party_da
                                                                                             num_parties,
                                                                                             party_data_size,
                                                                                             candidate_data_size,
-                                                                                            split,
-                                                                                            unequal_prop)
-
+                                                                                            split)
     kernel = get_kernel(dataset, d)
 
     # Reward calculation
@@ -85,7 +82,7 @@ def main(dataset, split, greed, condition, num_parties, num_classes, d, party_da
                                               party_datasets,
                                               kernel,
                                               greeds=greeds,
-                                              rel_tol=1e-5)
+                                              rel_tol=1e-10)
 
     # Save results
     pickle.dump((party_datasets, party_labels, reference_dataset, candidate_datasets, candidate_labels, rewards, deltas, mus),
