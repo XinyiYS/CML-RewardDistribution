@@ -3,7 +3,7 @@ import pickle
 from sacred import Experiment
 from sacred.observers import FileStorageObserver
 
-from data.pipeline import get_data
+from data.pipeline import get_data_features
 from core.kernel import get_kernel
 from core.reward_calculation import get_v, shapley, get_vN, get_v_is, get_eta_q
 from core.reward_realization import reward_realization
@@ -33,7 +33,7 @@ def gmm():
 @ex.named_config
 def mnist():
     dataset = "mnist"
-    split = "unequal"  # "equaldisjoint" or "unequal"
+    split = "equaldisjoint"  # "equaldisjoint" or "unequal"
     greed = 2
     condition = "stable"
     num_parties = 5
@@ -49,7 +49,7 @@ def mnist():
 @ex.named_config
 def cifar():
     dataset = "cifar"
-    split = "unequal"  # "equaldisjoint" or "unequal"
+    split = "equaldisjoint"  # "equaldisjoint" or "unequal"
     greed = 2
     condition = "stable"
     num_parties = 5
@@ -70,7 +70,7 @@ def main(dataset, split, greed, condition, num_parties, num_classes, d, party_da
     run_id = ex.current_run._id
     
     # Setup data and kernel
-    party_datasets, party_labels, reference_dataset, candidate_datasets, candidate_labels = get_data(dataset,
+    party_datasets, party_labels, reference_dataset, candidate_datasets, candidate_labels = get_data_features(dataset,
                                                                                             num_classes,
                                                                                             d,
                                                                                             num_parties,

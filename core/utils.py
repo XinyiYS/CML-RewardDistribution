@@ -17,12 +17,12 @@ def unison_shuffled_copies(a, b):
 
 def split_proportions(dataset, proportions, party_data_size=None):
     """
-    :param dataset: array of shape (num_classes, N, d).
+    :param dataset: array of shape (num_classes, N, ..).
     :param proportions: array of probability simplices of shape (num_parties, num_classes). Must sum to 1 along
     all rows and columns
-    :return: party_datasets array of shape (num_parties, N, d), party_labels array of shape(num_parties, N)
+    :return: party_datasets array of shape (num_parties, N, ..), party_labels array of shape(num_parties, N)
     """
-    num_classes, N, d = dataset.shape
+    num_classes, N = dataset.shape[0], dataset.shape[1]
     num_parties = proportions.shape[0]
     split_datasets = [[] for _ in range(num_parties)]
     split_labels = [[] for _ in range(num_parties)]
