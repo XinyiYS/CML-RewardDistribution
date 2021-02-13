@@ -8,6 +8,8 @@ from torch.utils.data import DataLoader, TensorDataset
 
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import Callback
+from pytorch_lightning.callbacks.early_stopping import EarlyStopping
+from pytorch_lightning.loggers import TensorBoardLogger
 
 from data.pipeline import get_data_raw
 
@@ -23,6 +25,15 @@ class ConcatDataset(torch.utils.data.Dataset):
         return min(len(d) for d in self.datasets)
 
 
+class CustomView(nn.Module):  # Flattening layer for nn.Sequential
+    def __init__(self, shape):
+        super(CustomView, self).__init__()
+        self.shape = shape
+
+    def forward(self, x):
+        return x.view(*self.shape)
+
+
 class VisualizationCallback(Callback):
     def on_epoch_end(self, trainer, pl_module):
         batch = next(iter(trainer.val_dataloaders[0]))
@@ -30,15 +41,13 @@ class VisualizationCallback(Callback):
         images = images.to(pl_module.device)
 
         # Pass through autoencoder
-        x = images.view(images.size(0), -1)
-        z = pl_module.encoder(x)
+        z = pl_module.encoder(images)
         x_hat = pl_module.decoder(z)
-        x_hat = x_hat.view(*images.size())
 
         images = torch.cat((images, x_hat), 0)
         images = images.cpu().detach().numpy()
-        images = images * trainer.stds + trainer.means
-        pl_module.logger.experiment.add_image("Autoencoder reconstruction", images, pl_module.current_epoch, dataformats='NHWC')
+        images = images * np.expand_dims(trainer.stds, axis=[1, 2]) + np.expand_dims(trainer.means, axis=[1, 2])
+        pl_module.logger.experiment.add_image("Autoencoder reconstruction", images, pl_module.current_epoch, dataformats='NCHW')
 
 
 class LitAutoEncoder(pl.LightningModule):
@@ -49,17 +58,43 @@ class LitAutoEncoder(pl.LightningModule):
     )
     """
 
-    def __init__(self, side_dim, num_channels, hidden_dim):
+    def __init__(self, num_channels, side_dim, hidden_dim):
         super().__init__()
+
         self.encoder = nn.Sequential(
-            nn.Linear(side_dim * side_dim * num_channels, 64),
-            nn.ReLU(),
-            nn.Linear(64, hidden_dim),
+            nn.Conv2d(in_channels=num_channels, out_channels=64, kernel_size=5, stride=2, padding=2),
+            nn.LeakyReLU(),
+            nn.BatchNorm2d(64),
+            nn.Conv2d(in_channels=64, out_channels=128, kernel_size=5, stride=2, padding=2),
+            nn.LeakyReLU(),
+            nn.BatchNorm2d(128),
+            nn.Conv2d(in_channels=128, out_channels=256, kernel_size=5, stride=2, padding=2),
+            nn.LeakyReLU(),
+            nn.BatchNorm2d(256),
+            nn.Conv2d(in_channels=256, out_channels=512, kernel_size=5, stride=2, padding=2),
+            nn.LeakyReLU(),
+            nn.BatchNorm2d(512),
+            CustomView((-1, 2048)),
+            nn.Linear(2048, hidden_dim)
         )
+
         self.decoder = nn.Sequential(
-            nn.Linear(hidden_dim, 64),
+            nn.Linear(hidden_dim, 2048),
             nn.ReLU(),
-            nn.Linear(64, side_dim * side_dim * num_channels),
+            nn.BatchNorm1d(2048),
+            CustomView((-1, 512, 2, 2)),
+            nn.ConvTranspose2d(512, 256, kernel_size=5, stride=2, padding=2, output_padding=1),
+            nn.ReLU(),
+            nn.BatchNorm2d(256),
+            nn.ConvTranspose2d(256, 128, kernel_size=5, stride=2, padding=2,
+                               output_padding=0 if side_dim == 28 else 1),
+            nn.ReLU(),
+            nn.BatchNorm2d(128),
+            nn.ConvTranspose2d(128, 64, kernel_size=5, stride=2, padding=2, output_padding=1),
+            nn.ReLU(),
+            nn.BatchNorm2d(64),
+            nn.ConvTranspose2d(64, num_channels, kernel_size=5, stride=2, padding=2, output_padding=1),
+            nn.Tanh()
         )
 
     def forward(self, x):
@@ -71,7 +106,6 @@ class LitAutoEncoder(pl.LightningModule):
         loss = 0
         for dataset in batch:
             x, y = dataset
-            x = x.view(x.size(0), -1)
             z = self.encoder(x)
             x_hat = self.decoder(z)
             loss += F.mse_loss(x_hat, x)
@@ -79,7 +113,6 @@ class LitAutoEncoder(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         x, y = batch
-        x = x.view(x.size(0), -1)
         z = self.encoder(x)
         x_hat = self.decoder(z)
         loss = F.mse_loss(x_hat, x)
@@ -127,10 +160,10 @@ def cli_main():
     # Standardize data and turn into PyTorch datasets
     datasets = []
     for i in range(num_parties):
-        transformed = (party_datasets[i] - means) / stds
+        transformed = np.transpose((party_datasets[i] - means) / stds, (0, 3, 1, 2))
         dataset = TensorDataset(torch.tensor(transformed), torch.tensor(party_labels[i]))
         datasets.append(dataset)
-    transformed = (candidate_dataset - means) / stds
+    transformed = np.transpose((candidate_dataset - means) / stds, (0, 3, 1, 2))
     dataset = TensorDataset(torch.tensor(transformed), torch.tensor(candidate_labels))
     datasets.append(dataset)
 
@@ -144,7 +177,7 @@ def cli_main():
         pin_memory=True)
 
     # Use combined dataset as validation dataloader
-    transformed_combined = (combined - means) / stds
+    transformed_combined = np.transpose((combined - means) / stds, (0, 3, 1, 2))
     combined_labels = np.concatenate([np.concatenate(party_labels), candidate_labels])
     combined_dataset = TensorDataset(torch.tensor(transformed_combined), torch.tensor(combined_labels))
     val_loader = torch.utils.data.DataLoader(
@@ -161,9 +194,10 @@ def cli_main():
     elif args.dataset == 'cifar':
         side_dim = 32
     else:
-        raise Exception("dataset must be either mnist or cifar")
-    model = LitAutoEncoder(side_dim=side_dim,
-                           num_channels=num_channels,
+        raise Exception("dataset argument needs to be either 'mnist' or 'cifar'")
+
+    model = LitAutoEncoder(num_channels=num_channels,
+                           side_dim=side_dim,
                            hidden_dim=args.hidden_dim)
 
     # ------------
@@ -171,10 +205,14 @@ def cli_main():
     # ------------
     trainer = pl.Trainer.from_argparse_args(args)
 
-    trainer.callbacks.append(VisualizationCallback())
     # These pass into the VisualizationCallback
     trainer.means = means
     trainer.stds = stds
+    trainer.callbacks.append(VisualizationCallback())
+    trainer.callbacks.append(EarlyStopping(monitor='val_loss'))
+
+    logger = TensorBoardLogger('lightning_logs', name='{}-{}'.format(args.dataset, args.hidden_dim))
+    trainer.logger = logger
 
     trainer.fit(model, train_dataloader=train_loader, val_dataloaders=val_loader)
 
