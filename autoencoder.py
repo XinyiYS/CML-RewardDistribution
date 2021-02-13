@@ -25,8 +25,8 @@ class ConcatDataset(torch.utils.data.Dataset):
 
 class VisualizationCallback(Callback):
     def on_epoch_end(self, trainer, pl_module):
-        batch = next(iter(trainer.train_dataloader))
-        images = batch[-1][0][:32]
+        batch = next(iter(trainer.val_dataloaders[0]))
+        images = batch[0][:32]
         images = images.to(pl_module.device)
 
         # Pass through autoencoder
@@ -38,7 +38,7 @@ class VisualizationCallback(Callback):
         images = torch.cat((images, x_hat), 0)
         images = images.cpu().detach().numpy()
         images = images * trainer.stds + trainer.means
-        pl_module.logger.experiment.add_image("Topkeks", images, pl_module.current_epoch, dataformats='NHWC')
+        pl_module.logger.experiment.add_image("Autoencoder reconstruction", images, pl_module.current_epoch, dataformats='NHWC')
 
 
 class LitAutoEncoder(pl.LightningModule):
@@ -49,17 +49,17 @@ class LitAutoEncoder(pl.LightningModule):
     )
     """
 
-    def __init__(self, hidden_dim):
+    def __init__(self, side_dim, num_channels, hidden_dim):
         super().__init__()
         self.encoder = nn.Sequential(
-            nn.Linear(28 * 28, 64),
+            nn.Linear(side_dim * side_dim * num_channels, 64),
             nn.ReLU(),
             nn.Linear(64, hidden_dim),
         )
         self.decoder = nn.Sequential(
             nn.Linear(hidden_dim, 64),
             nn.ReLU(),
-            nn.Linear(64, 28 * 28),
+            nn.Linear(64, side_dim * side_dim * num_channels),
         )
 
     def forward(self, x):
@@ -76,6 +76,14 @@ class LitAutoEncoder(pl.LightningModule):
             x_hat = self.decoder(z)
             loss += F.mse_loss(x_hat, x)
         return loss
+
+    def validation_step(self, batch, batch_idx):
+        x, y = batch
+        x = x.view(x.size(0), -1)
+        z = self.encoder(x)
+        x_hat = self.decoder(z)
+        loss = F.mse_loss(x_hat, x)
+        self.log('val_loss', loss)
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
@@ -112,7 +120,7 @@ def cli_main():
     num_parties = len(party_datasets)
     num_channels = party_datasets.shape[-1]
 
-    combined = np.concatenate([np.concatenate(party_datasets), candidate_dataset])
+    combined = np.concatenate([candidate_dataset, np.concatenate(party_datasets)])
     means = np.mean(combined.reshape(-1, num_channels), axis=0)
     stds = np.std(combined.reshape(-1, num_channels), axis=0)
 
@@ -127,18 +135,36 @@ def cli_main():
     datasets.append(dataset)
 
     concat_dataset = ConcatDataset(*datasets)
-    # loader returns a (num_parties + 1) length tuple, each element is a tuple with first element a tensor of shape
-    # (batch_size, H, W, C) and second element a tensor of shape (batch_size, )
-    loader = torch.utils.data.DataLoader(
+    # train_loader returns a (num_parties + 1) length tuple, each element is a tuple with first element a tensor of
+    # shape (batch_size, H, W, C) and second element a tensor of shape (batch_size, )
+    train_loader = torch.utils.data.DataLoader(
         concat_dataset,
         batch_size=args.batch_size,
         shuffle=True,
         pin_memory=True)
 
+    # Use combined dataset as validation dataloader
+    transformed_combined = (combined - means) / stds
+    combined_labels = np.concatenate([np.concatenate(party_labels), candidate_labels])
+    combined_dataset = TensorDataset(torch.tensor(transformed_combined), torch.tensor(combined_labels))
+    val_loader = torch.utils.data.DataLoader(
+        combined_dataset,
+        batch_size=args.batch_size,
+        shuffle=False,
+        pin_memory=True)
+
     # ------------
     # model
     # ------------
-    model = LitAutoEncoder(hidden_dim=args.hidden_dim)
+    if args.dataset == 'mnist':
+        side_dim = 28
+    elif args.dataset == 'cifar':
+        side_dim = 32
+    else:
+        raise Exception("dataset must be either mnist or cifar")
+    model = LitAutoEncoder(side_dim=side_dim,
+                           num_channels=num_channels,
+                           hidden_dim=args.hidden_dim)
 
     # ------------
     # training
@@ -150,13 +176,7 @@ def cli_main():
     trainer.means = means
     trainer.stds = stds
 
-    trainer.fit(model, train_dataloader=loader)
-
-    # ------------
-    # testing
-    # ------------
-    # result = trainer.test(test_dataloaders=loader)
-    # print(result)
+    trainer.fit(model, train_dataloader=train_loader, val_dataloaders=val_loader)
 
 
 if __name__ == '__main__':
