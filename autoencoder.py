@@ -124,7 +124,7 @@ class LitAutoEncoder(pl.LightningModule):
             nn.Tanh()
         )
 
-        self.kernel = get_kernel('rq_dot', hidden_dim)
+        self.kernel = get_kernel('rq', hidden_dim)
 
     def forward(self, x):
         # in lightning, forward defines the prediction/inference actions
