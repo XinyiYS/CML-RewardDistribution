@@ -74,7 +74,7 @@ class MMDCallback(Callback):
 
         v = get_v(all_party_features, candidate_features, pl_module.kernel, device=pl_module.device, batch_size=128)
 
-        pl_module.logger.experiment.add_scalars('v', v)
+        pl_module.logger.experiment.add_scalars('v', v, pl_module.current_epoch)
 
 
 class LitAutoEncoder(pl.LightningModule):
@@ -163,8 +163,8 @@ def cli_main():
     parser.add_argument('--hidden_dim', default=16, type=int)
     parser.add_argument('--dataset', default='mnist', type=str)  # TODO: Remove default?
     parser.add_argument('--num_classes', default=10, type=int)
-    parser.add_argument('--party_data_size', default=4000, type=int)
-    parser.add_argument('--candidate_data_size', default=10000, type=int)
+    parser.add_argument('--party_data_size', default=8000, type=int)
+    parser.add_argument('--candidate_data_size', default=40000, type=int)
     parser.add_argument('--split', default='equaldisjoint', type=str)
 
     parser = pl.Trainer.add_argparse_args(parser)
