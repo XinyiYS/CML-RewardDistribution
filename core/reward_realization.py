@@ -3,7 +3,8 @@ import torch
 from multiprocessing import Pool
 from scipy.special import softmax
 
-from core.utils import mmd_neg_biased, union
+from core.utils import union
+from core.mmd import mmd_neg_biased
 
 
 def v_update_batch(x, X, Y, S_X, S_XY, k):
@@ -13,8 +14,8 @@ def v_update_batch(x, X, Y, S_X, S_XY, k):
     :param x: vector of shape (z, d)
     :param X: array of shape (n, d)
     :param Y: array of shape (m, d)
-    :param A: Pairwise-XX summation term, float
-    :param B: Pairwise-XY summation term (including (-2) factor), float
+    :param S_X: Pairwise-XX summation term (NOT including minus sign), float
+    :param S_XY: Pairwise-XY summation term, float
     :param k: GPyTorch kernel
     :return: MMD^2, A, B, all arrays of size (z)
     """

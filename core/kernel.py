@@ -16,7 +16,7 @@ def get_kernel(dataset, d):
         rq10.alpha = 10.
         lin = gpytorch.kernels.LinearKernel()
         lin.variance = 1.
-        kernel = rq01 + rq1 + rq10 + lin
+        kernel = rq01 + rq1
         kernel.kernels.append(rq10)
         kernel.kernels.append(lin)
 

@@ -28,6 +28,7 @@ def gmm():
     perm_samp_high = 0.4
     perm_samp_low = 0.001
     perm_samp_iters = 8
+    gpu = True
 
 
 @ex.named_config
@@ -44,7 +45,7 @@ def mnist():
     perm_samp_high = 0.4
     perm_samp_low = 0.001
     perm_samp_iters = 8
-
+    gpu = True
 
 @ex.named_config
 def cifar():
@@ -60,15 +61,20 @@ def cifar():
     perm_samp_high = 0.4
     perm_samp_low = 0.001
     perm_samp_iters = 8
+    gpu = True
 
 
 @ex.automain
 def main(dataset, split, greed, condition, num_parties, num_classes, d, party_data_size,
-         candidate_data_size, perm_samp_high, perm_samp_low, perm_samp_iters):
+         candidate_data_size, perm_samp_high, perm_samp_low, perm_samp_iters, gpu):
     args = dict(sorted(locals().items()))
     print("Running with parameters {}".format(args))
     run_id = ex.current_run._id
-    
+    if gpu is True:
+        device = 'cuda:0'  # single GPU
+    else:
+        device = 'cpu'
+
     # Setup data and kernel
     party_datasets, party_labels, reference_dataset, candidate_datasets, candidate_labels = get_data_features(dataset,
                                                                                             num_classes,
@@ -80,7 +86,7 @@ def main(dataset, split, greed, condition, num_parties, num_classes, d, party_da
     kernel = get_kernel(dataset, d)
 
     # Reward calculation
-    v = get_v(party_datasets, reference_dataset, kernel)
+    v = get_v(party_datasets, reference_dataset, kernel, device=device, batch_size=128)
     print("Coalition values:\n{}".format(v))
     phi = shapley(v, num_parties)
     print("Shapley values:\n{}".format(phi))

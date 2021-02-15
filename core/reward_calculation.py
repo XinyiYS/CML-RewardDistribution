@@ -3,10 +3,10 @@ import math
 import itertools
 import scipy.stats
 
-from core.utils import mmd_neg_biased
+from core.mmd import mmd_neg_biased, mmd_neg_biased_batched
 
 
-def get_v(parties_datasets, reference_dataset, kernel):
+def get_v(parties_datasets, reference_dataset, kernel, device, batch_size=32):
     """
     Returns a dictionary with keys as repr(set(C)), e.g. v[repr(set((4,)))] = 10, v[repr(set((1,2)))] = 18 etc.,
     for all coalitions
@@ -21,7 +21,11 @@ def get_v(parties_datasets, reference_dataset, kernel):
     for coalition_size in range(1, num_parties + 1):
         for coalition in itertools.combinations(party_list, coalition_size):
             coalition_dataset = np.concatenate([parties_datasets[i - 1] for i in coalition], axis=0)
-            v[repr(set(coalition))] = mmd_neg_biased(coalition_dataset, reference_dataset, kernel)[0]
+            v[repr(set(coalition))] = mmd_neg_biased_batched(coalition_dataset,
+                                                             reference_dataset,
+                                                             kernel,
+                                                             device=device,
+                                                             batch_size=batch_size)[0]
 
     return v
 
