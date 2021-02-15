@@ -70,12 +70,12 @@ def split_data_into_classes(dataset, labels, num_classes):
 
 def mmd_neg_biased(X, Y, k):
     """
-    Calculates biased MMD^2. S_X, S_XY and S_YY are the pairwise-XX, pairwise-XY, pairwise-YY
+    Calculates biased MMD^2 without the S_YY term, where S_X, S_XY and S_YY are the pairwise-XX, pairwise-XY, pairwise-YY
     summation terms respectively.
     :param X: array of shape (n, d)
     :param Y: array of shape (m, d)
     :param k: GPyTorch kernel
-    :return: MMD^2, S_X, S_XY, S_YY
+    :return: MMD^2, S_X, S_XY, S_Y
     """
     m = X.shape[0]
     n = Y.shape[0]
@@ -84,11 +84,10 @@ def mmd_neg_biased(X, Y, k):
 
     S_X = (1 / (m ** 2)) * torch.sum(k(X_tens).evaluate())
     S_XY = (2 / (m * n)) * torch.sum(k(X_tens, Y_tens).evaluate())
-    S_Y = (1 / (n ** 2)) * torch.sum(k(Y_tens).evaluate())
 
-    return (S_XY - S_X).item(), S_X.item(), S_XY.item(), S_Y.item()
+    return (S_XY - S_X).item(), S_X.item(), S_XY.item()
 
 
 def norm(lst):
     max_val = max(lst)
-    return list(map(lambda x: (x)/(max_val), lst))
+    return list(map(lambda x: x / max_val, lst))

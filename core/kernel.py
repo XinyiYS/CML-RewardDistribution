@@ -17,6 +17,8 @@ def get_kernel(dataset, d):
         lin = gpytorch.kernels.LinearKernel()
         lin.variance = 1.
         kernel = rq01 + rq1 + rq10 + lin
+        kernel.kernels.append(rq10)
+        kernel.kernels.append(lin)
 
     else:
         raise Exception("Parameter dataset must be 'gmm', 'mnist', or 'cifar'")

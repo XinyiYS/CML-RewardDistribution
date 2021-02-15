@@ -46,7 +46,7 @@ def weighted_sampling(candidates, D, mu_target, Y, kernel, greed, rel_tol=1e-03)
     deltas = []
     mus = []
 
-    mu, S_X, S_XY, S_Y = mmd_neg_biased(D, Y, kernel)
+    mu, S_X, S_XY = mmd_neg_biased(D, Y, kernel)
     mus.append(mu)
     G = candidates.copy()
     
