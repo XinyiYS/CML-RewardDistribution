@@ -256,7 +256,9 @@ def cli_main():
 
     trainer.callbacks.append(EarlyStopping(monitor='val_loss'))
 
-    logger = TensorBoardLogger('lightning_logs', name='{}-{}'.format(args.dataset, args.hidden_dim))
+    logger = TensorBoardLogger('lightning_logs', name='{}-{}-{}'.format(args.dataset,
+                                                                        args.hidden_dim,
+                                                                        args.split))
     trainer.logger = logger
 
     trainer.fit(model, train_dataloader=train_loader, val_dataloaders=val_loader)
