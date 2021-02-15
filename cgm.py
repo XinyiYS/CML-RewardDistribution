@@ -83,7 +83,7 @@ def main(dataset, split, greed, condition, num_parties, num_classes, d, party_da
                                                                                             party_data_size,
                                                                                             candidate_data_size,
                                                                                             split)
-    kernel = get_kernel(dataset, d)
+    kernel = get_kernel('rq_dot', d)
 
     # Reward calculation
     v = get_v(party_datasets, reference_dataset, kernel, device=device, batch_size=128)
@@ -95,6 +95,7 @@ def main(dataset, split, greed, condition, num_parties, num_classes, d, party_da
     vN = get_vN(v, num_parties)
     v_is = get_v_is(v, num_parties)
 
+    # TODO: Implement batched GPU MMD calculation for all following methods, program currently breaks here
     best_eta, q = get_eta_q(vN, alpha, v_is, phi, v,
                             reference_dataset,
                             reference_dataset,

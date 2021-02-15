@@ -12,6 +12,8 @@ from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.loggers import TensorBoardLogger
 
 from data.pipeline import get_data_raw
+from core.kernel import get_kernel
+from core.reward_calculation import get_v
 
 
 class ConcatDataset(torch.utils.data.Dataset):
@@ -35,7 +37,7 @@ class CustomView(nn.Module):  # Flattening layer for nn.Sequential
 
 
 class VisualizationCallback(Callback):
-    def on_epoch_end(self, trainer, pl_module):
+    def on_validation_end(self, trainer, pl_module):
         batch = next(iter(trainer.val_dataloaders[0]))
         images = batch[0][:32]
         images = images.to(pl_module.device)
@@ -48,6 +50,31 @@ class VisualizationCallback(Callback):
         images = images.cpu().detach().numpy()
         images = images * np.expand_dims(trainer.stds, axis=[1, 2]) + np.expand_dims(trainer.means, axis=[1, 2])
         pl_module.logger.experiment.add_image("Autoencoder reconstruction", images, pl_module.current_epoch, dataformats='NCHW')
+
+
+class MMDCallback(Callback):
+    def on_validation_end(self, trainer, pl_module):
+        all_party_features = []
+        for dataloader in trainer.party_dataloaders:
+            ds_iter = iter(dataloader)
+            party_features = []
+            for batch in ds_iter:
+                z = pl_module.encoder(batch[0].to(pl_module.device))
+                party_features.append(z.cpu().detach().numpy())
+            party_features = np.concatenate(party_features)
+            all_party_features.append(party_features)
+        all_party_features = np.array(all_party_features)
+
+        ds_iter = iter(trainer.candidate_dataloader)
+        candidate_features = []
+        for batch in ds_iter:
+            z = pl_module.encoder(batch[0].to(pl_module.device))
+            candidate_features.append(z.cpu().detach().numpy())
+        candidate_features = np.concatenate(candidate_features)
+
+        v = get_v(all_party_features, candidate_features, pl_module.kernel, device=pl_module.device, batch_size=128)
+
+        pl_module.logger.experiment.add_scalars('v', v)
 
 
 class LitAutoEncoder(pl.LightningModule):
@@ -96,6 +123,8 @@ class LitAutoEncoder(pl.LightningModule):
             nn.ConvTranspose2d(64, num_channels, kernel_size=5, stride=2, padding=2, output_padding=1),
             nn.Tanh()
         )
+
+        self.kernel = get_kernel('rq_dot', hidden_dim)
 
     def forward(self, x):
         # in lightning, forward defines the prediction/inference actions
@@ -159,13 +188,23 @@ def cli_main():
 
     # Standardize data and turn into PyTorch datasets
     datasets = []
+    party_dataloaders = []  # for MMD logging
     for i in range(num_parties):
         transformed = np.transpose((party_datasets[i] - means) / stds, (0, 3, 1, 2))
         dataset = TensorDataset(torch.tensor(transformed), torch.tensor(party_labels[i]))
         datasets.append(dataset)
+        party_dataloaders.append(torch.utils.data.DataLoader(dataset,
+                                                             batch_size=args.batch_size,
+                                                             shuffle=False,
+                                                             pin_memory=True))
+
     transformed = np.transpose((candidate_dataset - means) / stds, (0, 3, 1, 2))
     dataset = TensorDataset(torch.tensor(transformed), torch.tensor(candidate_labels))
     datasets.append(dataset)
+    candidate_dataloader = torch.utils.data.DataLoader(dataset,
+                                                       batch_size=args.batch_size,
+                                                       shuffle=False,
+                                                       pin_memory=True)
 
     concat_dataset = ConcatDataset(*datasets)
     # train_loader returns a (num_parties + 1) length tuple, each element is a tuple with first element a tensor of
@@ -209,6 +248,12 @@ def cli_main():
     trainer.means = means
     trainer.stds = stds
     trainer.callbacks.append(VisualizationCallback())
+
+    # These are for MMDCallback
+    trainer.party_dataloaders = party_dataloaders
+    trainer.candidate_dataloader = candidate_dataloader
+    trainer.callbacks.append(MMDCallback())
+
     trainer.callbacks.append(EarlyStopping(monitor='val_loss'))
 
     logger = TensorBoardLogger('lightning_logs', name='{}-{}'.format(args.dataset, args.hidden_dim))

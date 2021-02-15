@@ -1,13 +1,13 @@
 import gpytorch
 
 
-def get_kernel(dataset, d):
-    if dataset == 'gmm':
+def get_kernel(kernel_name, d):
+    if kernel_name == 'se':
         kernel = gpytorch.kernels.ScaleKernel(gpytorch.kernels.RBFKernel(ard_num_dims=d))
         kernel.base_kernel.lengthscale = [0.05, 0.05]
         kernel.outputscale = 1
 
-    elif dataset == 'mnist' or 'cifar':
+    elif kernel_name == 'rq_dot':
         rq01 = gpytorch.kernels.RQKernel()
         rq01.alpha = 0.1
         rq1 = gpytorch.kernels.RQKernel()
@@ -21,6 +21,6 @@ def get_kernel(dataset, d):
         kernel.kernels.append(lin)
 
     else:
-        raise Exception("Parameter dataset must be 'gmm', 'mnist', or 'cifar'")
+        raise Exception("Kernel name must be 'se' or 'rq_dot'")
 
     return kernel
