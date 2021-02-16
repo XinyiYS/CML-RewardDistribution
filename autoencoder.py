@@ -265,11 +265,12 @@ def cli_main():
     trainer.callbacks.append(MMDCallback())
 
     trainer.callbacks.append(WeightHistogramCallback())
-    trainer.callbacks.append(EarlyStopping(monitor='val_loss'))
+    trainer.callbacks.append(EarlyStopping(monitor='val_loss', patience=5))
 
-    logger = TensorBoardLogger('lightning_logs', name='{}-{}-{}'.format(args.dataset,
-                                                                        args.hidden_dim,
-                                                                        args.split))
+    logger = TensorBoardLogger('lightning_logs', name='{}-{}-{}-lr{}'.format(args.dataset,
+                                                                             args.hidden_dim,
+                                                                             args.split,
+                                                                             args.lr))
     trainer.logger = logger
 
     trainer.fit(model, train_dataloader=train_loader, val_dataloaders=val_loader)
