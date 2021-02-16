@@ -14,11 +14,11 @@ def get_kernel(kernel_name, d):
         rq1.alpha = 1.
         rq10 = gpytorch.kernels.RQKernel()
         rq10.alpha = 10.
-        # lin = gpytorch.kernels.LinearKernel()
-        # lin.variance = 1.
         kernel = rq01 + rq1
         kernel.kernels.append(rq10)
-        #kernel.kernels.append(lin)
+        for k in kernel.kernels:
+            k.raw_alpha.requires_grad = False
+            k.raw_lengthscale.requires_grad = False
 
     else:
         raise Exception("Kernel name must be 'se' or 'rq'")

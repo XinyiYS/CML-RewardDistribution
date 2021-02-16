@@ -67,8 +67,8 @@ def mmd_neg_unbiased(X, Y, k):
     m = X.size(0)
     n = Y.size(0)
 
-    S_X = (1 / (m * (m-1))) * (torch.sum(k(X)) - torch.sum(torch.diag(k(X))))
-    S_XY = (2 / (m * n)) * torch.sum(k(X, Y))
-    S_Y = (1 / (n * (n-1))) * (torch.sum(k(Y)) - torch.sum(torch.diag(k(Y))))
+    S_X = (1 / (m * (m-1))) * (torch.sum(k(X).evaluate()) - torch.sum(torch.diag(k(X).evaluate())))
+    S_XY = (2 / (m * n)) * torch.sum(k(X, Y).evaluate())
+    S_Y = (1 / (n * (n-1))) * (torch.sum(k(Y).evaluate()) - torch.sum(torch.diag(k(Y).evaluate())))
 
     return S_XY - S_X - S_Y

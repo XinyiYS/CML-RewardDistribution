@@ -246,7 +246,7 @@ def cli_main():
     #                                                    shuffle=False,
     #                                                    pin_memory=True)
 
-    datasets.append(reference_dataloader)
+    datasets.append(combined_dataset)
     concat_dataset = ConcatDataset(*datasets)
     # train_loader returns a (num_parties + 2) length tuple, each element is a tuple with first element a tensor of
     # shape (batch_size, H, W, C) and second element a tensor of shape (batch_size, )
@@ -284,9 +284,9 @@ def cli_main():
     # These are for MMDCallback
     trainer.party_dataloaders = party_dataloaders
     trainer.reference_dataloader = reference_dataloader
-    trainer.callbacks.append(MMDCallback())
+    #trainer.callbacks.append(MMDCallback())
 
-    trainer.callbacks.append(WeightHistogramCallback())
+    #trainer.callbacks.append(WeightHistogramCallback())
     trainer.callbacks.append(EarlyStopping(monitor='autoencoder_loss', patience=5))
 
     logger = TensorBoardLogger('lightning_logs', name='{}-{}-{}-gamma{}-lr{}'.format(args.dataset,
