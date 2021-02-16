@@ -16,6 +16,8 @@ from data.pipeline import get_data_raw
 from core.kernel import get_kernel
 from core.reward_calculation import get_v
 from core.mmd import mmd_neg_unbiased
+from core.utils import unison_shuffled_copies
+
 
 class ConcatDataset(torch.utils.data.Dataset):
     def __init__(self, *datasets):
@@ -40,7 +42,7 @@ class CustomView(nn.Module):  # Flattening layer for nn.Sequential
 class VisualizationCallback(Callback):
     def on_validation_end(self, trainer, pl_module):
         batch = next(iter(trainer.val_dataloaders[0]))
-        images = batch[0][:32]
+        images = batch[-2][0][:32]
         images = images.to(pl_module.device)
 
         # Pass through autoencoder
@@ -154,16 +156,18 @@ class LitAutoEncoder(pl.LightningModule):
         return mmd_neg_unbiased(z_p, z_q, self.kernel)
 
     def training_step(self, batch, batch_idx):
-        loss = 0
+        ae_loss = 0
         # Autoencoder loss
         for dataset in batch[:-1]:
-            loss += self.gamma * self.autoencoder_loss(dataset)
+            ae_loss += self.gamma * self.autoencoder_loss(dataset)
 
+        mmd_loss = 0
         # MMD loss, parties against reference dataset (all parties + candidates)
         ref_dataset = batch[-1]
         for dataset in batch[:-2]:
-            loss += (1 - self.gamma) * self.mmd_loss(dataset, ref_dataset)
+            mmd_loss += (1 - self.gamma) * self.mmd_loss(dataset, ref_dataset)
 
+        loss = ae_loss + mmd_loss
         return loss
 
     def validation_step(self, batch, batch_idx):
@@ -224,7 +228,8 @@ def cli_main():
 
     # Use combined dataset as validation dataloader and last train dataloader
     transformed_combined = np.transpose((combined - means) / stds, (0, 3, 1, 2))
-    combined_labels = np.concatenate([np.concatenate(party_labels), candidate_labels])
+    combined_labels = np.concatenate([candidate_labels, np.concatenate(party_labels)])
+    transformed_combined, combined_labels = unison_shuffled_copies(transformed_combined, combined_labels)
     combined_dataset = TensorDataset(torch.tensor(transformed_combined), torch.tensor(combined_labels))
     reference_dataloader = torch.utils.data.DataLoader(
         combined_dataset,
@@ -291,9 +296,9 @@ def cli_main():
     # These are for MMDCallback
     trainer.party_dataloaders = party_dataloaders
     trainer.reference_dataloader = reference_dataloader
-    trainer.callbacks.append(MMDCallback())
+    #trainer.callbacks.append(MMDCallback())
 
-    trainer.callbacks.append(WeightHistogramCallback())
+    #trainer.callbacks.append(WeightHistogramCallback())
     trainer.callbacks.append(EarlyStopping(monitor='total_loss', patience=5))
 
     logger = TensorBoardLogger('lightning_logs', name='{}-{}-{}-gamma{}-lr{}'.format(args.dataset,
