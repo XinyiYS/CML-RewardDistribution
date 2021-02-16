@@ -15,7 +15,7 @@ from pytorch_lightning.loggers import TensorBoardLogger
 from data.pipeline import get_data_raw
 from core.kernel import get_kernel
 from core.reward_calculation import get_v
-
+from core.mmd import mmd_neg_unbiased
 
 class ConcatDataset(torch.utils.data.Dataset):
     def __init__(self, *datasets):
@@ -66,14 +66,14 @@ class MMDCallback(Callback):
             all_party_features.append(party_features)
         all_party_features = np.array(all_party_features)
 
-        ds_iter = iter(trainer.candidate_dataloader)
-        candidate_features = []
+        ds_iter = iter(trainer.reference_dataloader)
+        reference_features = []
         for batch in ds_iter:
             z = pl_module.encoder(batch[0].to(pl_module.device))
-            candidate_features.append(z.cpu().detach().numpy())
-        candidate_features = np.concatenate(candidate_features)
+            reference_features.append(z.cpu().detach().numpy())
+        reference_features = np.concatenate(reference_features)
 
-        v = get_v(all_party_features, candidate_features, pl_module.kernel, device=pl_module.device, batch_size=128)
+        v = get_v(all_party_features, reference_features, pl_module.kernel, device=pl_module.device, batch_size=128)
 
         pl_module.logger.experiment.add_scalars('v', v, pl_module.current_epoch)
 
@@ -92,7 +92,7 @@ class LitAutoEncoder(pl.LightningModule):
     )
     """
 
-    def __init__(self, num_channels, side_dim, hidden_dim, lr):
+    def __init__(self, num_channels, side_dim, hidden_dim, lr, gamma):
         super().__init__()
 
         self.encoder = nn.Sequential(OrderedDict([
@@ -133,27 +133,42 @@ class LitAutoEncoder(pl.LightningModule):
 
         self.kernel = get_kernel('rq', hidden_dim)
         self.lr = lr
+        self.gamma = gamma
 
     def forward(self, x):
         # in lightning, forward defines the prediction/inference actions
         embedding = self.encoder(x)
         return embedding
 
+    def autoencoder_loss(self, dataset):
+        x, y = dataset
+        z = self.encoder(x)
+        x_hat = self.decoder(z)
+        return F.mse_loss(x_hat, x)
+
+    def mmd_loss(self, p, q):
+        x_p, y_p = p
+        x_q, y_q = q
+        z_p = self.encoder(x_p)
+        z_q = self.encoder(x_q)
+        return mmd_neg_unbiased(z_p, z_q, self.kernel)
+
     def training_step(self, batch, batch_idx):
         loss = 0
-        for dataset in batch:
-            x, y = dataset
-            z = self.encoder(x)
-            x_hat = self.decoder(z)
-            loss += F.mse_loss(x_hat, x)
+        # Autoencoder loss
+        for dataset in batch[:-1]:
+            loss += self.gamma * self.autoencoder_loss(dataset)
+
+        # MMD loss, parties against reference dataset (all parties + candidates)
+        ref_dataset = batch[-1]
+        for dataset in batch[:-2]:
+            loss += (1 - self.gamma) * self.mmd_loss(dataset, ref_dataset)
+
         return loss
 
     def validation_step(self, batch, batch_idx):
-        x, y = batch
-        z = self.encoder(x)
-        x_hat = self.decoder(z)
-        loss = F.mse_loss(x_hat, x)
-        self.log('val_loss', loss)
+        loss = self.autoencoder_loss(batch)
+        self.log('autoencoder_loss', loss)
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
@@ -170,6 +185,7 @@ def cli_main():
     parser.add_argument('--batch_size', default=64, type=int)
     parser.add_argument('--hidden_dim', default=16, type=int)
     parser.add_argument('--lr', default=1e-3, type=float)
+    parser.add_argument('--gamma', default=1, type=float) #  gamma = 1 means only autoencoder loss, gamma = 0 means only mmd loss
     parser.add_argument('--dataset', default='mnist', type=str)  # TODO: Remove default?
     parser.add_argument('--num_classes', default=10, type=int)
     parser.add_argument('--party_data_size', default=10000, type=int)
@@ -195,6 +211,21 @@ def cli_main():
     means = np.mean(combined.reshape(-1, num_channels), axis=0)
     stds = np.std(combined.reshape(-1, num_channels), axis=0)
 
+    # Use combined dataset as validation dataloader and last train dataloader
+    transformed_combined = np.transpose((combined - means) / stds, (0, 3, 1, 2))
+    combined_labels = np.concatenate([np.concatenate(party_labels), candidate_labels])
+    combined_dataset = TensorDataset(torch.tensor(transformed_combined), torch.tensor(combined_labels))
+    val_loader = torch.utils.data.DataLoader(
+        combined_dataset,
+        batch_size=args.batch_size,
+        shuffle=False,
+        pin_memory=True)
+    reference_dataloader = torch.utils.data.DataLoader(
+        combined_dataset,
+        batch_size=args.batch_size,
+        shuffle=True,
+        pin_memory=True)
+
     # Standardize data and turn into PyTorch datasets
     datasets = []
     party_dataloaders = []  # for MMD logging
@@ -210,28 +241,19 @@ def cli_main():
     transformed = np.transpose((candidate_dataset - means) / stds, (0, 3, 1, 2))
     dataset = TensorDataset(torch.tensor(transformed), torch.tensor(candidate_labels))
     datasets.append(dataset)
-    candidate_dataloader = torch.utils.data.DataLoader(dataset,
-                                                       batch_size=args.batch_size,
-                                                       shuffle=False,
-                                                       pin_memory=True)
+    # candidate_dataloader = torch.utils.data.DataLoader(dataset,
+    #                                                    batch_size=args.batch_size,
+    #                                                    shuffle=False,
+    #                                                    pin_memory=True)
 
+    datasets.append(reference_dataloader)
     concat_dataset = ConcatDataset(*datasets)
-    # train_loader returns a (num_parties + 1) length tuple, each element is a tuple with first element a tensor of
+    # train_loader returns a (num_parties + 2) length tuple, each element is a tuple with first element a tensor of
     # shape (batch_size, H, W, C) and second element a tensor of shape (batch_size, )
     train_loader = torch.utils.data.DataLoader(
         concat_dataset,
         batch_size=args.batch_size,
         shuffle=True,
-        pin_memory=True)
-
-    # Use combined dataset as validation dataloader
-    transformed_combined = np.transpose((combined - means) / stds, (0, 3, 1, 2))
-    combined_labels = np.concatenate([np.concatenate(party_labels), candidate_labels])
-    combined_dataset = TensorDataset(torch.tensor(transformed_combined), torch.tensor(combined_labels))
-    val_loader = torch.utils.data.DataLoader(
-        combined_dataset,
-        batch_size=args.batch_size,
-        shuffle=False,
         pin_memory=True)
 
     # ------------
@@ -261,15 +283,16 @@ def cli_main():
 
     # These are for MMDCallback
     trainer.party_dataloaders = party_dataloaders
-    trainer.candidate_dataloader = candidate_dataloader
+    trainer.reference_dataloader = reference_dataloader
     trainer.callbacks.append(MMDCallback())
 
     trainer.callbacks.append(WeightHistogramCallback())
-    trainer.callbacks.append(EarlyStopping(monitor='val_loss', patience=5))
+    trainer.callbacks.append(EarlyStopping(monitor='autoencoder_loss', patience=5))
 
-    logger = TensorBoardLogger('lightning_logs', name='{}-{}-{}-lr{}'.format(args.dataset,
+    logger = TensorBoardLogger('lightning_logs', name='{}-{}-{}-gamma{}-lr{}'.format(args.dataset,
                                                                              args.hidden_dim,
                                                                              args.split,
+                                                                             args.gamma,
                                                                              args.lr))
     trainer.logger = logger
 
