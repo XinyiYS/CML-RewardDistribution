@@ -167,8 +167,19 @@ class LitAutoEncoder(pl.LightningModule):
         return loss
 
     def validation_step(self, batch, batch_idx):
-        loss = self.autoencoder_loss(batch)
-        self.log('autoencoder_loss', loss)
+        ae_loss = 0
+        for dataset in batch[:-1]:
+            ae_loss += self.autoencoder_loss(dataset)
+        self.log('autoencoder_loss', ae_loss)
+
+        mmd_loss = 0
+        ref_dataset = batch[-1]
+        for dataset in batch[:-2]:
+            mmd_loss += self.mmd_loss(dataset, ref_dataset)
+        self.log('mmd_loss', mmd_loss)
+
+        self.log('total_loss', ae_loss + mmd_loss)
+
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
@@ -215,11 +226,6 @@ def cli_main():
     transformed_combined = np.transpose((combined - means) / stds, (0, 3, 1, 2))
     combined_labels = np.concatenate([np.concatenate(party_labels), candidate_labels])
     combined_dataset = TensorDataset(torch.tensor(transformed_combined), torch.tensor(combined_labels))
-    val_loader = torch.utils.data.DataLoader(
-        combined_dataset,
-        batch_size=args.batch_size,
-        shuffle=False,
-        pin_memory=True)
     reference_dataloader = torch.utils.data.DataLoader(
         combined_dataset,
         batch_size=args.batch_size,
@@ -241,11 +247,6 @@ def cli_main():
     transformed = np.transpose((candidate_dataset - means) / stds, (0, 3, 1, 2))
     dataset = TensorDataset(torch.tensor(transformed), torch.tensor(candidate_labels))
     datasets.append(dataset)
-    # candidate_dataloader = torch.utils.data.DataLoader(dataset,
-    #                                                    batch_size=args.batch_size,
-    #                                                    shuffle=False,
-    #                                                    pin_memory=True)
-
     datasets.append(combined_dataset)
     concat_dataset = ConcatDataset(*datasets)
     # train_loader returns a (num_parties + 2) length tuple, each element is a tuple with first element a tensor of
@@ -254,6 +255,11 @@ def cli_main():
         concat_dataset,
         batch_size=args.batch_size,
         shuffle=True,
+        pin_memory=True)
+    val_loader = torch.utils.data.DataLoader(
+        concat_dataset,
+        batch_size=args.batch_size,
+        shuffle=False,
         pin_memory=True)
 
     # ------------
@@ -269,7 +275,8 @@ def cli_main():
     model = LitAutoEncoder(num_channels=num_channels,
                            side_dim=side_dim,
                            hidden_dim=args.hidden_dim,
-                           lr=args.lr)
+                           lr=args.lr,
+                           gamma=args.gamma)
 
     # ------------
     # training
@@ -284,10 +291,10 @@ def cli_main():
     # These are for MMDCallback
     trainer.party_dataloaders = party_dataloaders
     trainer.reference_dataloader = reference_dataloader
-    #trainer.callbacks.append(MMDCallback())
+    trainer.callbacks.append(MMDCallback())
 
-    #trainer.callbacks.append(WeightHistogramCallback())
-    trainer.callbacks.append(EarlyStopping(monitor='autoencoder_loss', patience=5))
+    trainer.callbacks.append(WeightHistogramCallback())
+    trainer.callbacks.append(EarlyStopping(monitor='total_loss', patience=5))
 
     logger = TensorBoardLogger('lightning_logs', name='{}-{}-{}-gamma{}-lr{}'.format(args.dataset,
                                                                              args.hidden_dim,
