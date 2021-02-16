@@ -5,6 +5,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
+from collections import OrderedDict
 
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import Callback
@@ -94,41 +95,41 @@ class LitAutoEncoder(pl.LightningModule):
     def __init__(self, num_channels, side_dim, hidden_dim):
         super().__init__()
 
-        self.encoder = nn.Sequential(
-            nn.Conv2d(in_channels=num_channels, out_channels=64, kernel_size=5, stride=2, padding=2),
-            nn.LeakyReLU(),
-            nn.BatchNorm2d(64),
-            nn.Conv2d(in_channels=64, out_channels=128, kernel_size=5, stride=2, padding=2),
-            nn.LeakyReLU(),
-            nn.BatchNorm2d(128),
-            nn.Conv2d(in_channels=128, out_channels=256, kernel_size=5, stride=2, padding=2),
-            nn.LeakyReLU(),
-            nn.BatchNorm2d(256),
-            nn.Conv2d(in_channels=256, out_channels=512, kernel_size=5, stride=2, padding=2),
-            nn.LeakyReLU(),
-            nn.BatchNorm2d(512),
-            CustomView((-1, 2048)),
-            nn.Linear(2048, hidden_dim)
-        )
+        self.encoder = nn.Sequential(OrderedDict([
+            ('conv1', nn.Conv2d(in_channels=num_channels, out_channels=64, kernel_size=5, stride=2, padding=2)),
+            ('lrelu1', nn.LeakyReLU()),
+            ('bn1', nn.BatchNorm2d(64)),
+            ('conv2', nn.Conv2d(in_channels=64, out_channels=128, kernel_size=5, stride=2, padding=2)),
+            ('lrelu2', nn.LeakyReLU()),
+            ('bn2', nn.BatchNorm2d(128)),
+            ('conv3', nn.Conv2d(in_channels=128, out_channels=256, kernel_size=5, stride=2, padding=2)),
+            ('lrelu3', nn.LeakyReLU()),
+            ('bn3', nn.BatchNorm2d(256)),
+            ('conv4', nn.Conv2d(in_channels=256, out_channels=512, kernel_size=5, stride=2, padding=2)),
+            ('lrelu4', nn.LeakyReLU()),
+            ('bn4', nn.BatchNorm2d(512)),
+            ('view1', CustomView((-1, 2048))),
+            ('linear1', nn.Linear(2048, hidden_dim))
+        ]))
 
-        self.decoder = nn.Sequential(
-            nn.Linear(hidden_dim, 2048),
-            nn.ReLU(),
-            nn.BatchNorm1d(2048),
-            CustomView((-1, 512, 2, 2)),
-            nn.ConvTranspose2d(512, 256, kernel_size=5, stride=2, padding=2, output_padding=1),
-            nn.ReLU(),
-            nn.BatchNorm2d(256),
-            nn.ConvTranspose2d(256, 128, kernel_size=5, stride=2, padding=2,
-                               output_padding=0 if side_dim == 28 else 1),
-            nn.ReLU(),
-            nn.BatchNorm2d(128),
-            nn.ConvTranspose2d(128, 64, kernel_size=5, stride=2, padding=2, output_padding=1),
-            nn.ReLU(),
-            nn.BatchNorm2d(64),
-            nn.ConvTranspose2d(64, num_channels, kernel_size=5, stride=2, padding=2, output_padding=1),
-            nn.Tanh()
-        )
+        self.decoder = nn.Sequential(OrderedDict([
+            ('linear1', nn.Linear(hidden_dim, 2048)),
+            ('relu1', nn.ReLU()),
+            ('bn1', nn.BatchNorm1d(2048)),
+            ('view1', CustomView((-1, 512, 2, 2))),
+            ('convT1', nn.ConvTranspose2d(512, 256, kernel_size=5, stride=2, padding=2, output_padding=1)),
+            ('relu2', nn.ReLU()),
+            ('bn2', nn.BatchNorm2d(256)),
+            ('convT2', nn.ConvTranspose2d(256, 128, kernel_size=5, stride=2, padding=2,
+                               output_padding=0 if side_dim == 28 else 1)),
+            ('relu3', nn.ReLU()),
+            ('bn3', nn.BatchNorm2d(128)),
+            ('convT3', nn.ConvTranspose2d(128, 64, kernel_size=5, stride=2, padding=2, output_padding=1)),
+            ('relu4', nn.ReLU()),
+            ('bn4', nn.BatchNorm2d(64)),
+            ('convT4', nn.ConvTranspose2d(64, num_channels, kernel_size=5, stride=2, padding=2, output_padding=1)),
+            ('tanh1', nn.Tanh())
+        ]))
 
         self.kernel = get_kernel('rq', hidden_dim)
 

@@ -54,3 +54,13 @@ def mmd_neg_biased_batched(X, Y, k, device, batch_size=128):
                    torch.sum(k(X_tens[m:next_m]).evaluate())) / (next_m ** 2)
 
     return (S_XY - S_X).item(), S_X.item(), S_XY.item()
+
+
+def mmd_neg_unbiased(X, Y, k):
+    """
+    Used as loss function.
+    :param X: Torch tensor
+    :param Y: Torch tensor
+    :param k: GPyTorch kernel
+    :return: scalar
+    """
