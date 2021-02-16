@@ -92,7 +92,7 @@ class LitAutoEncoder(pl.LightningModule):
     )
     """
 
-    def __init__(self, num_channels, side_dim, hidden_dim):
+    def __init__(self, num_channels, side_dim, hidden_dim, lr):
         super().__init__()
 
         self.encoder = nn.Sequential(OrderedDict([
@@ -132,6 +132,7 @@ class LitAutoEncoder(pl.LightningModule):
         ]))
 
         self.kernel = get_kernel('rq', hidden_dim)
+        self.lr = lr
 
     def forward(self, x):
         # in lightning, forward defines the prediction/inference actions
@@ -155,7 +156,7 @@ class LitAutoEncoder(pl.LightningModule):
         self.log('val_loss', loss)
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
         return optimizer
 
 
@@ -168,6 +169,7 @@ def cli_main():
     parser = ArgumentParser()
     parser.add_argument('--batch_size', default=64, type=int)
     parser.add_argument('--hidden_dim', default=16, type=int)
+    parser.add_argument('--lr', default=1e-3, type=float)
     parser.add_argument('--dataset', default='mnist', type=str)  # TODO: Remove default?
     parser.add_argument('--num_classes', default=10, type=int)
     parser.add_argument('--party_data_size', default=10000, type=int)
@@ -244,7 +246,8 @@ def cli_main():
 
     model = LitAutoEncoder(num_channels=num_channels,
                            side_dim=side_dim,
-                           hidden_dim=args.hidden_dim)
+                           hidden_dim=args.hidden_dim,
+                           lr=args.lr)
 
     # ------------
     # training
