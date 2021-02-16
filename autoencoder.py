@@ -159,13 +159,13 @@ class LitAutoEncoder(pl.LightningModule):
         ae_loss = 0
         # Autoencoder loss
         for dataset in batch[:-1]:
-            ae_loss += self.gamma * self.autoencoder_loss(dataset)
+            ae_loss += self.autoencoder_loss(dataset)
 
         mmd_loss = 0
         # MMD loss, parties against reference dataset (all parties + candidates)
         ref_dataset = batch[-1]
         for dataset in batch[:-2]:
-            mmd_loss += self.mmd_loss(dataset, ref_dataset)
+            mmd_loss += self.gamma * self.mmd_loss(dataset, ref_dataset)
 
         loss = ae_loss + mmd_loss
         return loss
@@ -299,7 +299,7 @@ def cli_main():
     trainer.callbacks.append(MMDCallback())
 
     trainer.callbacks.append(WeightHistogramCallback())
-    trainer.callbacks.append(EarlyStopping(monitor='total_loss', patience=5))
+    trainer.callbacks.append(EarlyStopping(monitor='total_loss', patience=10))
 
     logger = TensorBoardLogger('lightning_logs', name='{}-{}-{}-gamma{}-lr{}'.format(args.dataset,
                                                                              args.hidden_dim,
