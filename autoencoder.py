@@ -77,6 +77,12 @@ class MMDCallback(Callback):
         pl_module.logger.experiment.add_scalars('v', v, pl_module.current_epoch)
 
 
+class WeightHistogramCallback(Callback):
+    def on_train_epoch_end(self, trainer, pl_module, outputs):
+        for name, params in pl_module.named_parameters():
+            pl_module.logger.experiment.add_histogram(name, params, pl_module.current_epoch)
+
+
 class LitAutoEncoder(pl.LightningModule):
     """
     LitAutoEncoder(
@@ -163,7 +169,7 @@ def cli_main():
     parser.add_argument('--hidden_dim', default=16, type=int)
     parser.add_argument('--dataset', default='mnist', type=str)  # TODO: Remove default?
     parser.add_argument('--num_classes', default=10, type=int)
-    parser.add_argument('--party_data_size', default=8000, type=int)
+    parser.add_argument('--party_data_size', default=10000, type=int)
     parser.add_argument('--candidate_data_size', default=40000, type=int)
     parser.add_argument('--split', default='equaldisjoint', type=str)
 
@@ -254,6 +260,7 @@ def cli_main():
     trainer.candidate_dataloader = candidate_dataloader
     trainer.callbacks.append(MMDCallback())
 
+    trainer.callbacks.append(WeightHistogramCallback())
     trainer.callbacks.append(EarlyStopping(monitor='val_loss'))
 
     logger = TensorBoardLogger('lightning_logs', name='{}-{}-{}'.format(args.dataset,
