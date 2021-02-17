@@ -206,6 +206,7 @@ def cli_main():
     parser.add_argument('--party_data_size', default=10000, type=int)
     parser.add_argument('--candidate_data_size', default=40000, type=int)
     parser.add_argument('--split', default='equaldisjoint', type=str)
+    parser.add_argument('--patience', default=10, type=int)
 
     parser = pl.Trainer.add_argparse_args(parser)
 
@@ -299,7 +300,7 @@ def cli_main():
     trainer.callbacks.append(MMDCallback())
 
     trainer.callbacks.append(WeightHistogramCallback())
-    trainer.callbacks.append(EarlyStopping(monitor='total_loss', patience=10))
+    trainer.callbacks.append(EarlyStopping(monitor='total_loss', patience=args.patience))
 
     logger = TensorBoardLogger('lightning_logs', name='{}-{}-{}-gamma{}-lr{}'.format(args.dataset,
                                                                              args.hidden_dim,
