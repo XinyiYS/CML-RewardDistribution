@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 from scipy.special import softmax
+from tqdm import tqdm
 
 from core.utils import union
 from core.mmd import mmd_neg_biased_batched
@@ -95,7 +96,7 @@ def weighted_sampling(candidates, D, mu_target, Y, kernel, greed, rel_tol=1e-03,
     mu_max = mu
     time_since_mu_max_update = 0
 
-    for _ in range(m):
+    for _ in tqdm(range(m)):
         if len(G) == 1:
             break
 
@@ -173,5 +174,6 @@ def reward_realization(candidates, Y, r, D, kernel, greeds=None, rel_tol=1e-3, d
         rewards.append(reward)
         deltas.append(delta)
         mus.append(mu)
+        print("Finished weight sampling for party {} with reward size {}".format(i+1, len(reward)))
 
     return rewards, deltas, mus

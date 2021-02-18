@@ -28,6 +28,7 @@ def gmm():
     perm_samp_high = 0.4
     perm_samp_low = 0.001
     perm_samp_iters = 8
+    kernel = 'se'
     gpu = True
 
 
@@ -45,6 +46,7 @@ def mnist():
     perm_samp_high = 0.4
     perm_samp_low = 0.001
     perm_samp_iters = 8
+    kernel = 'rq'
     gpu = True
 
 @ex.named_config
@@ -61,12 +63,13 @@ def cifar():
     perm_samp_high = 0.4
     perm_samp_low = 0.001
     perm_samp_iters = 8
+    kernel = 'rq'
     gpu = True
 
 
 @ex.automain
 def main(dataset, split, greed, condition, num_parties, num_classes, d, party_data_size,
-         candidate_data_size, perm_samp_high, perm_samp_low, perm_samp_iters, gpu):
+         candidate_data_size, perm_samp_high, perm_samp_low, perm_samp_iters, kernel, gpu):
     args = dict(sorted(locals().items()))
     print("Running with parameters {}".format(args))
     run_id = ex.current_run._id
@@ -83,7 +86,7 @@ def main(dataset, split, greed, condition, num_parties, num_classes, d, party_da
                                                                                             party_data_size,
                                                                                             candidate_data_size,
                                                                                             split)
-    kernel = get_kernel('se', d)
+    kernel = get_kernel(kernel, d)
 
     # Reward calculation
     v = get_v(party_datasets, reference_dataset, kernel, device=device, batch_size=128)
