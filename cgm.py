@@ -83,7 +83,7 @@ def main(dataset, split, greed, condition, num_parties, num_classes, d, party_da
                                                                                             party_data_size,
                                                                                             candidate_data_size,
                                                                                             split)
-    kernel = get_kernel('rq_dot', d)
+    kernel = get_kernel('se', d)
 
     # Reward calculation
     v = get_v(party_datasets, reference_dataset, kernel, device=device, batch_size=128)
@@ -95,7 +95,6 @@ def main(dataset, split, greed, condition, num_parties, num_classes, d, party_da
     vN = get_vN(v, num_parties)
     v_is = get_v_is(v, num_parties)
 
-    # TODO: Implement batched GPU MMD calculation for all following methods, program currently breaks here
     best_eta, q = get_eta_q(vN, alpha, v_is, phi, v,
                             reference_dataset,
                             reference_dataset,
@@ -103,7 +102,8 @@ def main(dataset, split, greed, condition, num_parties, num_classes, d, party_da
                             perm_samp_low,
                             perm_samp_high,
                             perm_samp_iters,
-                            mode=condition)
+                            mode=condition,
+                            device=device)
 
     print("Best eta value: {}".format(best_eta))
     r = list(map(q, alpha))
@@ -117,7 +117,8 @@ def main(dataset, split, greed, condition, num_parties, num_classes, d, party_da
                                               party_datasets,
                                               kernel,
                                               greeds=greeds,
-                                              rel_tol=1e-10)
+                                              rel_tol=1e-10,
+                                              device=device)
 
     # Save results
     pickle.dump((party_datasets, party_labels, reference_dataset, candidate_datasets, candidate_labels, rewards, deltas, mus),

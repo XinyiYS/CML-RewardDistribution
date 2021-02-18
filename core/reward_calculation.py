@@ -3,7 +3,7 @@ import math
 import itertools
 import scipy.stats
 
-from core.mmd import mmd_neg_biased, mmd_neg_biased_batched
+from core.mmd import mmd_neg_biased_batched
 
 
 def get_v(parties_datasets, reference_dataset, kernel, device, batch_size=32):
@@ -70,7 +70,7 @@ def get_vCi(i, phi, v):
     return v[repr(set(lower_phi))]
 
 
-def perm_sampling_neg_biased(P, Q, k, num_perms=200, eta=1.0):
+def perm_sampling_neg_biased(P, Q, k, num_perms=200, eta=1.0, device='cpu'):
     """
     Shuffles two datasets together, splits this mix in 2, then calculates MMD to simulate P=Q. Does this num_perms
     number of times.
@@ -89,7 +89,7 @@ def perm_sampling_neg_biased(P, Q, k, num_perms=200, eta=1.0):
         p = np.random.permutation(len(P))
         X = P[p[:num_samples]]
         Y = Q
-        mmds.append(mmd_neg_biased(X, Y, k)[0])
+        mmds.append(mmd_neg_biased_batched(X, Y, k, device)[0])
     return sorted(mmds)
 
 
@@ -131,7 +131,7 @@ def get_q(sorted_vX, vN, dist="skewnormal"):
 
 
 def get_eta_q(vN, alpha, v_is, phi, v, perm_samp_dataset, reference_dataset, kernel, low=0.001, high=1., num_iters=10,
-              mode="all"):
+              mode="all", device='cpu'):
     """
     Binary search for lowest value of eta that satisfies desired condition
     alpha_i: list of N alpha values
@@ -162,14 +162,14 @@ def get_eta_q(vN, alpha, v_is, phi, v, perm_samp_dataset, reference_dataset, ker
 
     print("Checking high value of eta")
     eta = high
-    sorted_vX = perm_sampling_neg_biased(perm_samp_dataset, reference_dataset, kernel, num_perms=200, eta=eta)
+    sorted_vX = perm_sampling_neg_biased(perm_samp_dataset, reference_dataset, kernel, num_perms=200, eta=eta, device=device)
     q = get_q(sorted_vX, vN)
     if not condition(q):
         raise ValueError("High value of eta already violates {} condition".format(mode))
 
     print("Checking low value of eta")
     eta = low
-    sorted_vX = perm_sampling_neg_biased(perm_samp_dataset, reference_dataset, kernel, num_perms=200, eta=eta)
+    sorted_vX = perm_sampling_neg_biased(perm_samp_dataset, reference_dataset, kernel, num_perms=200, eta=eta, device=device)
     q = get_q(sorted_vX, vN)
     if condition(q):
         print("Low value of eta already satisfies {} condition".format(mode))
@@ -183,7 +183,7 @@ def get_eta_q(vN, alpha, v_is, phi, v, perm_samp_dataset, reference_dataset, ker
         print("current_high={}, current_low={}".format(current_high, current_low))
         eta = (current_high + current_low) / 2
         print("Evaluating for eta = {}".format(eta))
-        sorted_vX = perm_sampling_neg_biased(perm_samp_dataset, reference_dataset, kernel, num_perms=200, eta=eta)
+        sorted_vX = perm_sampling_neg_biased(perm_samp_dataset, reference_dataset, kernel, num_perms=200, eta=eta, device=device)
         q = get_q(sorted_vX, vN)
 
         if condition(q):
