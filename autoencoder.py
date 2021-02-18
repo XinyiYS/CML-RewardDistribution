@@ -205,7 +205,7 @@ def cli_main():
     parser.add_argument('--hidden_dim', default=16, type=int)
     parser.add_argument('--lr', default=1e-3, type=float)
     parser.add_argument('--gamma', default=0, type=float)
-    parser.add_argument('--lmbda', default=1, type=float)
+    parser.add_argument('--lmbda', default=0, type=float)
     parser.add_argument('--dataset', default='mnist', type=str)  # TODO: Remove default?
     parser.add_argument('--num_classes', default=10, type=int)
     parser.add_argument('--party_data_size', default=10000, type=int)
@@ -304,16 +304,17 @@ def cli_main():
     # These are for MMDCallback
     trainer.party_dataloaders = party_dataloaders
     trainer.reference_dataloader = reference_dataloader
-    #trainer.callbacks.append(MMDCallback())
+    trainer.callbacks.append(MMDCallback())
 
     trainer.callbacks.append(WeightHistogramCallback())
     trainer.callbacks.append(EarlyStopping(monitor='total_loss', patience=args.patience))
 
-    logger = TensorBoardLogger('lightning_logs', name='{}-{}-{}-gamma{}-lr{}'.format(args.dataset,
-                                                                             args.hidden_dim,
-                                                                             args.split,
-                                                                             args.gamma,
-                                                                             args.lr))
+    logger = TensorBoardLogger('lightning_logs', name='{}-{}-{}-gamma{}-lmbda{}-lr{}'.format(args.dataset,
+                                                                                             args.hidden_dim,
+                                                                                             args.split,
+                                                                                             args.gamma,
+                                                                                             args.lmbda,
+                                                                                             args.lr))
     trainer.logger = logger
 
     trainer.fit(model, train_dataloader=train_loader, val_dataloaders=val_loader)
