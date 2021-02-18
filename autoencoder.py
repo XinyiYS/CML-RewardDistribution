@@ -94,7 +94,7 @@ class LitAutoEncoder(pl.LightningModule):
     )
     """
 
-    def __init__(self, num_channels, side_dim, hidden_dim, lr, gamma, lmbda, batch_size):
+    def __init__(self, num_channels, side_dim, hidden_dim, lr, gamma, lmbda):
         super().__init__()
 
         self.encoder = nn.Sequential(OrderedDict([
@@ -137,8 +137,6 @@ class LitAutoEncoder(pl.LightningModule):
         self.lr = lr
         self.gamma = gamma
         self.lmbda = lmbda
-        self.batch_size = batch_size
-        self.register_buffer("zeros", torch.zeros((batch_size, hidden_dim)))  # For L1 regularization
 
     def forward(self, x):
         # in lightning, forward defines the prediction/inference actions
@@ -150,7 +148,9 @@ class LitAutoEncoder(pl.LightningModule):
         z = self.encoder(x)
         x_hat = self.decoder(z)
         reg = nn.L1Loss(reduction='sum')
-        return F.mse_loss(x_hat, x) + self.lmbda * reg(z, self.zeros)
+        zeros = torch.zeros(z.shape)
+        zeros = zeros.type_as(x)
+        return F.mse_loss(x_hat, x) + self.lmbda * reg(z, zeros)
 
     def mmd_loss(self, p, q):
         x_p, y_p = p
@@ -288,8 +288,7 @@ def cli_main():
                            hidden_dim=args.hidden_dim,
                            lr=args.lr,
                            gamma=args.gamma,
-                           lmbda=args.lmbda,
-                           batch_size=args.batch_size)
+                           lmbda=args.lmbda)
 
     # ------------
     # training
