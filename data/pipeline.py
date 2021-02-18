@@ -32,7 +32,7 @@ def get_proportions(split, dataset):
                              [0.005, 0.005, 0.005, 0.005, 0.005, 0.005, 0.195, 0.195, 0.290, 0.290]])
 
 
-def get_data_features(dataset, num_classes, d, num_parties, party_data_size, candidate_data_size, split):
+def get_data_features(dataset, num_classes, d, num_parties, party_data_size, candidate_data_size, split, gamma):
     prop = get_proportions(split, dataset)
 
     if dataset == 'gmm':
@@ -53,31 +53,21 @@ def get_data_features(dataset, num_classes, d, num_parties, party_data_size, can
         gmm_points, candidate_labels = sample_GMM(means, covs, candidate_data_size)
         candidate_datasets = np.array([gmm_points] * num_parties)
 
-        # Reference dataset
-        all_parties_dataset = np.concatenate(party_datasets)
-        reference_dataset = np.concatenate([all_parties_dataset, candidate_datasets[0]], axis=0)
-
     elif dataset == 'mnist' or dataset == 'cifar':
         np.random.seed(0)
-        train_features = np.load("data/{}/{}_train_features.npy".format(dataset, dataset))
-        train_labels = np.load("data/{}/{}_train_labels.npy".format(dataset, dataset))
-        candidate_features = np.load("data/{}/{}_hF_features.npy".format(dataset, dataset))
-        candidate_labels = np.load("data/{}/{}_samples_labels.npy".format(dataset, dataset))
+        party_datasets = np.load("data/{}/{}-gamma{}-party_features.npy".format(dataset, split, gamma))
+        party_labels = np.load("data/{}/{}-gamma{}-party_labels.npy".format(dataset, split, gamma))
+        candidate_dataset = np.load("data/{}/{}-gamma{}-cand_features.npy".format(dataset, split, gamma))
+        candidate_labels = np.load("data/{}/{}-gamma{}-cand_labels.npy".format(dataset, split, gamma))
 
-        # Party datasets
-        data_in_classes = split_data_into_classes(train_features, train_labels, num_classes)
-        party_datasets, party_labels = split_proportions(data_in_classes, prop, party_data_size)
-
-        # Candidate datasets
-        candidate_datasets = np.array([candidate_features[:candidate_data_size]] * num_parties)
-        candidate_labels = candidate_labels[:candidate_data_size]
-
-        # Reference dataset
-        all_parties_dataset = np.concatenate(party_datasets)
-        reference_dataset = np.concatenate([all_parties_dataset, candidate_datasets[0]], axis=0)
+        candidate_datasets = np.array([candidate_dataset] * num_parties)
 
     else:
         raise Exception("Parameter dataset must be 'gmm', 'mnist', or 'cifar'")
+
+    # Reference dataset
+    all_parties_dataset = np.concatenate(party_datasets)
+    reference_dataset = np.concatenate([all_parties_dataset, candidate_datasets[0]], axis=0)
 
     return party_datasets, party_labels, reference_dataset, candidate_datasets, candidate_labels
 
