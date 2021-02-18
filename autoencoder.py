@@ -94,7 +94,7 @@ class LitAutoEncoder(pl.LightningModule):
     )
     """
 
-    def __init__(self, num_channels, side_dim, hidden_dim, lr, gamma):
+    def __init__(self, num_channels, side_dim, hidden_dim, lr, gamma, lmbda, batch_size):
         super().__init__()
 
         self.encoder = nn.Sequential(OrderedDict([
@@ -136,6 +136,9 @@ class LitAutoEncoder(pl.LightningModule):
         self.kernel = get_kernel('rq', hidden_dim)
         self.lr = lr
         self.gamma = gamma
+        self.lmbda = lmbda
+        self.batch_size = batch_size
+        self.register_buffer("zeros", torch.zeros((batch_size, hidden_dim)))  # For L1 regularization
 
     def forward(self, x):
         # in lightning, forward defines the prediction/inference actions
@@ -146,7 +149,8 @@ class LitAutoEncoder(pl.LightningModule):
         x, y = dataset
         z = self.encoder(x)
         x_hat = self.decoder(z)
-        return F.mse_loss(x_hat, x)
+        reg = nn.L1Loss(reduction='sum')
+        return F.mse_loss(x_hat, x) + self.lmbda * reg(z, self.zeros)
 
     def mmd_loss(self, p, q):
         x_p, y_p = p
@@ -200,7 +204,8 @@ def cli_main():
     parser.add_argument('--batch_size', default=64, type=int)
     parser.add_argument('--hidden_dim', default=16, type=int)
     parser.add_argument('--lr', default=1e-3, type=float)
-    parser.add_argument('--gamma', default=1, type=float) #  higher gamma = more focus on AE
+    parser.add_argument('--gamma', default=0, type=float)
+    parser.add_argument('--lmbda', default=1, type=float)
     parser.add_argument('--dataset', default='mnist', type=str)  # TODO: Remove default?
     parser.add_argument('--num_classes', default=10, type=int)
     parser.add_argument('--party_data_size', default=10000, type=int)
@@ -282,7 +287,9 @@ def cli_main():
                            side_dim=side_dim,
                            hidden_dim=args.hidden_dim,
                            lr=args.lr,
-                           gamma=args.gamma)
+                           gamma=args.gamma,
+                           lmbda=args.lmbda,
+                           batch_size=args.batch_size)
 
     # ------------
     # training
@@ -297,7 +304,7 @@ def cli_main():
     # These are for MMDCallback
     trainer.party_dataloaders = party_dataloaders
     trainer.reference_dataloader = reference_dataloader
-    trainer.callbacks.append(MMDCallback())
+    #trainer.callbacks.append(MMDCallback())
 
     trainer.callbacks.append(WeightHistogramCallback())
     trainer.callbacks.append(EarlyStopping(monitor='total_loss', patience=args.patience))
