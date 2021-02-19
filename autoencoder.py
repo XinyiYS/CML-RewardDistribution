@@ -2,7 +2,6 @@ from argparse import ArgumentParser
 
 import numpy as np
 import torch
-import torch.nn.functional as F
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 from collections import OrderedDict
@@ -52,6 +51,7 @@ class VisualizationCallback(Callback):
         images = torch.cat((images, x_hat), 0)
         images = images.cpu().detach().numpy()
         pl_module.logger.experiment.add_image("Autoencoder reconstruction", images, pl_module.current_epoch, dataformats='NCHW')
+        pl_module.logger.experiment.add_scalar("mean_norm_hidden", torch.mean(torch.linalg.norm(z, ord=1, dim=1)))
 
 
 class MMDCallback(Callback):
@@ -298,7 +298,7 @@ def cli_main():
     # These are for MMDCallback
     trainer.party_dataloaders = party_dataloaders
     trainer.reference_dataloader = reference_dataloader
-    #trainer.callbacks.append(MMDCallback())
+    trainer.callbacks.append(MMDCallback())
 
     trainer.callbacks.append(WeightHistogramCallback())
     trainer.callbacks.append(EarlyStopping(monitor='total_loss', patience=args.patience))
