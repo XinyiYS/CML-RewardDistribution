@@ -129,7 +129,7 @@ class LitAutoEncoder(pl.LightningModule):
             ('relu4', nn.ReLU()),
             ('bn4', nn.BatchNorm2d(64)),
             ('convT4', nn.ConvTranspose2d(64, num_channels, kernel_size=5, stride=2, padding=2, output_padding=1)),
-            ('tanh1', nn.Tanh())
+            ('tanh1', nn.Sigmoid())
         ]))
 
         self.kernel = get_kernel('rq', hidden_dim)
@@ -146,10 +146,11 @@ class LitAutoEncoder(pl.LightningModule):
         x, y = dataset
         z = self.encoder(x)
         x_hat = self.decoder(z)
+        cross_entropy_loss = nn.BCELoss()
         reg = nn.L1Loss(reduction='sum')
         zeros = torch.zeros(z.shape)
         zeros = zeros.type_as(x)
-        return F.mse_loss(x_hat, x) + self.lmbda * reg(z, zeros)
+        return cross_entropy_loss(x_hat, x) + self.lmbda * reg(z, zeros)
 
     def mmd_loss(self, p, q):
         x_p, y_p = p
@@ -297,7 +298,7 @@ def cli_main():
     # These are for MMDCallback
     trainer.party_dataloaders = party_dataloaders
     trainer.reference_dataloader = reference_dataloader
-    trainer.callbacks.append(MMDCallback())
+    #trainer.callbacks.append(MMDCallback())
 
     trainer.callbacks.append(WeightHistogramCallback())
     trainer.callbacks.append(EarlyStopping(monitor='total_loss', patience=args.patience))
