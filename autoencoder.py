@@ -51,7 +51,6 @@ class VisualizationCallback(Callback):
 
         images = torch.cat((images, x_hat), 0)
         images = images.cpu().detach().numpy()
-        images = images * np.expand_dims(trainer.stds, axis=[1, 2]) + np.expand_dims(trainer.means, axis=[1, 2])
         pl_module.logger.experiment.add_image("Autoencoder reconstruction", images, pl_module.current_epoch, dataformats='NCHW')
 
 
@@ -228,15 +227,12 @@ def cli_main():
     num_parties = len(party_datasets)
     num_channels = party_datasets.shape[-1]
 
-    combined = np.concatenate([candidate_dataset, np.concatenate(party_datasets)])
-    means = np.mean(combined.reshape(-1, num_channels), axis=0)
-    stds = np.std(combined.reshape(-1, num_channels), axis=0)
+    combined = np.transpose(np.concatenate([candidate_dataset, np.concatenate(party_datasets)]), (0, 3, 1, 2))
 
     # Use combined dataset as validation dataloader and last train dataloader
-    transformed_combined = np.transpose((combined - means) / stds, (0, 3, 1, 2))
     combined_labels = np.concatenate([candidate_labels, np.concatenate(party_labels)])
-    transformed_combined, combined_labels = unison_shuffled_copies(transformed_combined, combined_labels)
-    combined_dataset = TensorDataset(torch.tensor(transformed_combined), torch.tensor(combined_labels))
+    combined, combined_labels = unison_shuffled_copies(combined, combined_labels)
+    combined_dataset = TensorDataset(torch.tensor(combined), torch.tensor(combined_labels))
     reference_dataloader = torch.utils.data.DataLoader(
         combined_dataset,
         batch_size=args.batch_size,
@@ -247,7 +243,7 @@ def cli_main():
     datasets = []
     party_dataloaders = []  # for MMD logging
     for i in range(num_parties):
-        transformed = np.transpose((party_datasets[i] - means) / stds, (0, 3, 1, 2))
+        transformed = np.transpose(party_datasets[i], (0, 3, 1, 2))
         dataset = TensorDataset(torch.tensor(transformed), torch.tensor(party_labels[i]))
         datasets.append(dataset)
         party_dataloaders.append(torch.utils.data.DataLoader(dataset,
@@ -255,7 +251,7 @@ def cli_main():
                                                              shuffle=False,
                                                              pin_memory=True))
 
-    transformed = np.transpose((candidate_dataset - means) / stds, (0, 3, 1, 2))
+    transformed = np.transpose(candidate_dataset, (0, 3, 1, 2))
     dataset = TensorDataset(torch.tensor(transformed), torch.tensor(candidate_labels))
     datasets.append(dataset)
     datasets.append(combined_dataset)
@@ -296,8 +292,6 @@ def cli_main():
     trainer = pl.Trainer.from_argparse_args(args)
 
     # These pass into the VisualizationCallback
-    trainer.means = means
-    trainer.stds = stds
     trainer.callbacks.append(VisualizationCallback())
 
     # These are for MMDCallback
