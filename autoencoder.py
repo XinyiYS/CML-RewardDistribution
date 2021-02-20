@@ -51,7 +51,7 @@ class VisualizationCallback(Callback):
         images = torch.cat((images, x_hat), 0)
         images = images.cpu().detach().numpy()
         pl_module.logger.experiment.add_image("Autoencoder reconstruction", images, pl_module.current_epoch, dataformats='NCHW')
-        pl_module.logger.experiment.add_scalar("mean_norm_hidden", torch.mean(torch.linalg.norm(z, ord=1, dim=1)))
+        pl_module.logger.experiment.add_scalar("mean_norm_hidden", torch.mean(torch.linalg.norm(z, ord=1, dim=1)), pl_module.current_epoch)
 
 
 class MMDCallback(Callback):

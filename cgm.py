@@ -4,7 +4,7 @@ from sacred import Experiment
 from sacred.observers import FileStorageObserver
 
 from data.pipeline import get_data_features
-from core.kernel import get_kernel
+from core.kernel import get_kernel, median_heuristic
 from core.reward_calculation import get_v, shapley, get_vN, get_v_is, get_eta_q
 from core.reward_realization import reward_realization
 from core.utils import norm
@@ -41,13 +41,13 @@ def mnist():
     condition = "stable"
     num_parties = 5
     num_classes = 10
-    d = 2  # Only for GMM
-    party_data_size = 5000
-    candidate_data_size = 10000
+    d = 16
+    party_data_size = 10000
+    candidate_data_size = 40000
     perm_samp_high = 0.4
     perm_samp_low = 0.001
     perm_samp_iters = 8
-    kernel = 'rq'
+    kernel = 'se'
     gamma = '0'
     gpu = True
 
@@ -60,13 +60,13 @@ def cifar():
     condition = "stable"
     num_parties = 5
     num_classes = 10
-    d = 2  # Only for GMM
-    party_data_size = 5000
-    candidate_data_size = 10000
+    d = 64
+    party_data_size = 10000
+    candidate_data_size = 40000
     perm_samp_high = 0.4
     perm_samp_low = 0.001
     perm_samp_iters = 8
-    kernel = 'rq'
+    kernel = 'se'
     gamma = '0'
     gpu = True
 
@@ -91,7 +91,9 @@ def main(dataset, split, greed, condition, num_parties, num_classes, d, party_da
                                                                                             candidate_data_size,
                                                                                             split,
                                                                                             gamma)
-    kernel = get_kernel(kernel, d)
+    print("Calculating median heuristic")
+    lengthscale = median_heuristic(reference_dataset)
+    kernel = get_kernel(kernel, d, lengthscale)
 
     # Reward calculation
     v = get_v(party_datasets, reference_dataset, kernel, device=device, batch_size=128)
