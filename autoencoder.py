@@ -132,7 +132,7 @@ class LitAutoEncoder(pl.LightningModule):
             ('tanh1', nn.Sigmoid())
         ]))
 
-        self.kernel = get_kernel('rq', hidden_dim)
+        self.kernel = get_kernel('rq', hidden_dim, 1)
         self.lr = lr
         self.gamma = gamma
         self.lmbda = lmbda

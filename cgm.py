@@ -5,7 +5,7 @@ from sacred.observers import FileStorageObserver
 
 from data.pipeline import get_data_features
 from core.kernel import get_kernel, median_heuristic
-from core.reward_calculation import get_v, shapley, get_vN, get_v_is, get_eta_q
+from core.reward_calculation import get_v, shapley, get_vN, get_v_is, get_eta_q, get_q_rho
 from core.reward_realization import reward_realization
 from core.utils import norm
 from metrics.class_imbalance import get_classes, class_proportion
@@ -18,6 +18,7 @@ ex.observers.append(FileStorageObserver('runs'))
 def gmm():
     dataset = "gmm"
     split = "unequal"  # "equaldisjoint" or "unequal"
+    mode = "rho_shapley"
     greed = 2
     condition = "stable"
     num_parties = 5
@@ -37,6 +38,7 @@ def gmm():
 def mnist():
     dataset = "mnist"
     split = "equaldisjoint"  # "equaldisjoint" or "unequal"
+    mode = "rho_shapley"
     greed = 2
     condition = "stable"
     num_parties = 5
@@ -56,6 +58,7 @@ def mnist():
 def cifar():
     dataset = "cifar"
     split = "equaldisjoint"  # "equaldisjoint" or "unequal"
+    mode = "rho_shapley"  # "perm_samp" or "rho_shapley"
     greed = 2
     condition = "stable"
     num_parties = 5
@@ -72,7 +75,7 @@ def cifar():
 
 
 @ex.automain
-def main(dataset, split, greed, condition, num_parties, num_classes, d, party_data_size,
+def main(dataset, split, mode, greed, condition, num_parties, num_classes, d, party_data_size,
          candidate_data_size, perm_samp_high, perm_samp_low, perm_samp_iters, kernel, gamma, gpu):
     args = dict(sorted(locals().items()))
     print("Running with parameters {}".format(args))
@@ -105,17 +108,25 @@ def main(dataset, split, greed, condition, num_parties, num_classes, d, party_da
     vN = get_vN(v, num_parties)
     v_is = get_v_is(v, num_parties)
 
-    best_eta, q = get_eta_q(vN, alpha, v_is, phi, v,
-                            reference_dataset,
-                            reference_dataset,
-                            kernel,
-                            perm_samp_low,
-                            perm_samp_high,
-                            perm_samp_iters,
-                            mode=condition,
-                            device=device)
+    if mode == 'perm_samp':
+        print("Using permutation sampling to calculate reward vector")
+        best_eta, q = get_eta_q(vN, alpha, v_is, phi, v,
+                                reference_dataset,
+                                reference_dataset,
+                                kernel,
+                                perm_samp_low,
+                                perm_samp_high,
+                                perm_samp_iters,
+                                mode=condition,
+                                device=device)
 
-    print("Best eta value: {}".format(best_eta))
+        print("Best eta value: {}".format(best_eta))
+
+    if mode == 'rho_shapley':
+        print("Using rho-Shapley to calculate reward vector")
+        q, rho = get_q_rho(alpha, v_is, vN, phi, v)
+        print("rho: {}".format(rho))
+
     r = list(map(q, alpha))
     print("Reward values: \n{}".format(r))
 
