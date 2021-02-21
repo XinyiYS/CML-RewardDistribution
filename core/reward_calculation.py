@@ -201,17 +201,17 @@ def get_eta_q(vN, alpha, v_is, phi, v, perm_samp_dataset, reference_dataset, ker
     return current_high, current_high_q
 
 
-def get_q_rho(alpha, v_is, vN, phi, v, cond='R5'):
+def get_q_rho(alpha, v_is, vN, phi, v, cond='stable'):
     rho = 1
 
-    if cond == 'R5':
+    if cond == 'all':
         for i in range(len(alpha)):
             if alpha[i] == 1:
                 continue
             else:
                 if (np.log(v_is[i]) - np.log(vN)) / np.log(alpha[i]) < rho:
                     rho = (np.log(v_is[i]) - np.log(vN)) / np.log(alpha[i])
-    else:
+    elif cond == 'stable':
         for i in range(len(alpha)):
             if alpha[i] == 1:
                 continue
@@ -219,4 +219,6 @@ def get_q_rho(alpha, v_is, vN, phi, v, cond='R5'):
                 vCi = get_vCi(i + 1, phi, v)
                 if (np.log(vCi) - np.log(vN)) / np.log(alpha[i]) < rho:
                     rho = (np.log(vCi) - np.log(vN)) / np.log(alpha[i])
+    else:
+        raise Exception("cond must be either all or stable")
     return lambda x: x ** rho * vN, rho

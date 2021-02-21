@@ -19,7 +19,7 @@ def gmm():
     dataset = "gmm"
     split = "unequal"  # "equaldisjoint" or "unequal"
     mode = "rho_shapley"
-    greed = 2
+    greed = 1
     condition = "stable"
     num_parties = 5
     num_classes = 5
@@ -124,7 +124,7 @@ def main(dataset, split, mode, greed, condition, num_parties, num_classes, d, pa
 
     if mode == 'rho_shapley':
         print("Using rho-Shapley to calculate reward vector")
-        q, rho = get_q_rho(alpha, v_is, vN, phi, v)
+        q, rho = get_q_rho(alpha, v_is, vN, phi, v, cond='stable')
         print("rho: {}".format(rho))
 
     r = list(map(q, alpha))
