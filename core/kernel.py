@@ -23,6 +23,19 @@ def get_kernel(kernel_name, d, lengthscale):
         kernel.base_kernel.lengthscale = [lengthscale for _ in range(d)]
         kernel.outputscale = 1
 
+    if kernel_name == 'se_sum':
+        kernel01 = gpytorch.kernels.ScaleKernel(gpytorch.kernels.RBFKernel(ard_num_dims=d))
+        kernel01.base_kernel.lengthscale = [0.1*lengthscale for _ in range(d)]
+        kernel01.outputscale = 1
+        kernel1 = gpytorch.kernels.ScaleKernel(gpytorch.kernels.RBFKernel(ard_num_dims=d))
+        kernel1.base_kernel.lengthscale = [1 * lengthscale for _ in range(d)]
+        kernel1.outputscale = 1
+        kernel10 = gpytorch.kernels.ScaleKernel(gpytorch.kernels.RBFKernel(ard_num_dims=d))
+        kernel10.base_kernel.lengthscale = [10 * lengthscale for _ in range(d)]
+        kernel10.outputscale = 1
+        kernel = kernel01 + kernel1
+        kernel.kernels.append(kernel10)
+
     elif kernel_name == 'rq':
         rq01 = gpytorch.kernels.RQKernel()
         rq01.alpha = 0.1

@@ -71,7 +71,7 @@ def cifar():
     perm_samp_high = 0.4
     perm_samp_low = 0.001
     perm_samp_iters = 8
-    kernel = 'se'
+    kernel = 'se_sum'
     gamma = '0'
     gpu = True
     batch_size = 2048
