@@ -32,6 +32,7 @@ def gmm():
     kernel = 'se'
     gamma = '0'
     gpu = True
+    batch_size = 2048
 
 
 @ex.named_config
@@ -52,6 +53,7 @@ def mnist():
     kernel = 'se'
     gamma = '0'
     gpu = True
+    batch_size = 2048
 
 
 @ex.named_config
@@ -72,11 +74,12 @@ def cifar():
     kernel = 'se'
     gamma = '0'
     gpu = True
+    batch_size = 2048
 
 
 @ex.automain
 def main(dataset, split, mode, greed, condition, num_parties, num_classes, d, party_data_size,
-         candidate_data_size, perm_samp_high, perm_samp_low, perm_samp_iters, kernel, gamma, gpu):
+         candidate_data_size, perm_samp_high, perm_samp_low, perm_samp_iters, kernel, gamma, gpu, batch_size):
     args = dict(sorted(locals().items()))
     print("Running with parameters {}".format(args))
     run_id = ex.current_run._id
@@ -139,7 +142,8 @@ def main(dataset, split, mode, greed, condition, num_parties, num_classes, d, pa
                                               kernel,
                                               greeds=greeds,
                                               rel_tol=1e-10,
-                                              device=device)
+                                              device=device,
+                                              batch_size=batch_size)
 
     # Save results
     pickle.dump((party_datasets, party_labels, reference_dataset, candidate_datasets, candidate_labels, rewards, deltas, mus),

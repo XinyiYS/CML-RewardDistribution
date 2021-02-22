@@ -40,7 +40,7 @@ def v_update_batch(x, X, Y, S_X, S_XY, k):
     return current_v, S_X_arr, S_XY_arr
 
 
-def v_update_batch_iter(x, X, Y, S_X, S_XY, k, device, batch_size=64):
+def v_update_batch_iter(x, X, Y, S_X, S_XY, k, device, batch_size=2048):
     """
     Calculates v when we add a batch of points to a set with an already calculated v. Updating one point like this takes
     linear time instead of quadratic time by naively redoing the entire calculation.
@@ -82,7 +82,7 @@ def v_update_batch_iter(x, X, Y, S_X, S_XY, k, device, batch_size=64):
     return current_v, S_X_arr, S_XY_arr
 
 
-def weighted_sampling(candidates, D, mu_target, Y, kernel, greed, rel_tol=1e-03, device='cpu'):
+def weighted_sampling(candidates, D, mu_target, Y, kernel, greed, rel_tol=1e-03, device='cpu', batch_size=2048):
     print("Running weighted sampling algorithm with -MMD^2 target {}".format(mu_target))
     m = candidates.shape[0]
     R = []
@@ -101,7 +101,7 @@ def weighted_sampling(candidates, D, mu_target, Y, kernel, greed, rel_tol=1e-03,
             break
 
         DuR = union(D, R)
-        neg_mmds_new, S_Xs_temp, S_XYs_temp = v_update_batch_iter(G, DuR, Y, S_X, S_XY, kernel, device)
+        neg_mmds_new, S_Xs_temp, S_XYs_temp = v_update_batch_iter(G, DuR, Y, S_X, S_XY, kernel, device, batch_size)
         deltas_temp = neg_mmds_new - mu
         weights = deltas_temp
 
@@ -142,7 +142,7 @@ def weighted_sampling(candidates, D, mu_target, Y, kernel, greed, rel_tol=1e-03,
     return R, deltas, mus
 
 
-def reward_realization(candidates, Y, r, D, kernel, greeds=None, rel_tol=1e-3, device='cpu'):
+def reward_realization(candidates, Y, r, D, kernel, greeds=None, rel_tol=1e-3, device='cpu', batch_size=2048):
     """
     Reward realization algorithm. Defaults to pure greedy algorithm
     :param candidates: Candidate points from generator distribution, one for each party. array of shape (k, m, d)
@@ -170,7 +170,8 @@ def reward_realization(candidates, Y, r, D, kernel, greeds=None, rel_tol=1e-3, d
                                               kernel=kernel,
                                               greed=greeds[i],
                                               rel_tol=rel_tol,
-                                              device=device)
+                                              device=device,
+                                              batch_size=batch_size)
         rewards.append(reward)
         deltas.append(delta)
         mus.append(mu)
