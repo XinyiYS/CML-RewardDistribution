@@ -275,10 +275,10 @@ def cli_main():
     # ------------
     if args.dataset == 'mnist':
         side_dim = 28
-    elif args.dataset == 'cifar':
+    elif args.dataset == 'cifar' or 'cifar5':
         side_dim = 32
     else:
-        raise Exception("dataset argument needs to be either 'mnist' or 'cifar'")
+        raise Exception("dataset argument needs to be either 'mnist' or 'cifar' or 'cifar5'")
 
     model = LitAutoEncoder(num_channels=num_channels,
                            side_dim=side_dim,
@@ -298,7 +298,7 @@ def cli_main():
     # These are for MMDCallback
     trainer.party_dataloaders = party_dataloaders
     trainer.reference_dataloader = reference_dataloader
-    trainer.callbacks.append(MMDCallback())
+    #trainer.callbacks.append(MMDCallback())
 
     trainer.callbacks.append(WeightHistogramCallback())
     trainer.callbacks.append(EarlyStopping(monitor='total_loss', patience=args.patience))

@@ -4,7 +4,7 @@ from core.utils import split_proportions, split_data_into_classes
 
 
 def get_proportions(split, dataset):
-    if dataset == 'gmm':  # WARNING: implicitly assumes 5 parties and 5 classes
+    if dataset == 'gmm' or dataset == 'cifar5':  # WARNING: implicitly assumes 5 parties and 5 classes
         if split == 'equaldisjoint':
             return np.array([[0.96, 0.01, 0.01, 0.01, 0.01],
                              [0.01, 0.96, 0.01, 0.01, 0.01],
