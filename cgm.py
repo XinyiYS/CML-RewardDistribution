@@ -77,6 +77,27 @@ def cifar():
     batch_size = 2048
 
 
+@ex.named_config
+def cifar5():
+    dataset = "cifar5"
+    split = "equaldisjoint"  # "equaldisjoint" or "unequal"
+    mode = "rho_shapley"  # "perm_samp" or "rho_shapley"
+    greed = 2
+    condition = "stable"
+    num_parties = 5
+    num_classes = 5
+    d = 64
+    party_data_size = 5000
+    candidate_data_size = 20000
+    perm_samp_high = 0.4
+    perm_samp_low = 0.001
+    perm_samp_iters = 8
+    kernel = 'se_sum'
+    gamma = '0'
+    gpu = True
+    batch_size = 2048
+
+
 @ex.automain
 def main(dataset, split, mode, greed, condition, num_parties, num_classes, d, party_data_size,
          candidate_data_size, perm_samp_high, perm_samp_low, perm_samp_iters, kernel, gamma, gpu, batch_size):

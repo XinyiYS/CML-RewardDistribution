@@ -298,7 +298,7 @@ def cli_main():
     # These are for MMDCallback
     trainer.party_dataloaders = party_dataloaders
     trainer.reference_dataloader = reference_dataloader
-    #trainer.callbacks.append(MMDCallback())
+    trainer.callbacks.append(MMDCallback())
 
     trainer.callbacks.append(WeightHistogramCallback())
     trainer.callbacks.append(EarlyStopping(monitor='total_loss', patience=args.patience))
