@@ -53,7 +53,7 @@ def get_data_features(dataset, num_classes, d, num_parties, party_data_size, can
         gmm_points, candidate_labels = sample_GMM(means, covs, candidate_data_size)
         candidate_datasets = np.array([gmm_points] * num_parties)
 
-    elif dataset == 'mnist' or dataset == 'cifar':
+    elif dataset == 'mnist' or dataset == 'cifar' or dataset=='cifar5':
         np.random.seed(0)
         party_datasets = np.load("data/{}/{}-gamma{}-party_features.npy".format(dataset, split, gamma))
         party_labels = np.load("data/{}/{}-gamma{}-party_labels.npy".format(dataset, split, gamma))
@@ -63,7 +63,7 @@ def get_data_features(dataset, num_classes, d, num_parties, party_data_size, can
         candidate_datasets = np.array([candidate_dataset] * num_parties)
 
     else:
-        raise Exception("Parameter dataset must be 'gmm', 'mnist', or 'cifar'")
+        raise Exception("Parameter dataset must be 'gmm', 'mnist', 'cifar' or 'cifar5'")
 
     # Reference dataset
     all_parties_dataset = np.concatenate(party_datasets)
