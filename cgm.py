@@ -131,7 +131,7 @@ def main(dataset, split, mode, greed, condition, num_parties, num_classes, d, pa
         kernel = optimize_kernel(kernel, device, party_datasets, reference_dataset)
 
     # Reward calculation
-    v = get_v(party_datasets, reference_dataset, kernel, device=device, batch_size=128)
+    v = get_v(party_datasets, reference_dataset, kernel, device=device, batch_size=batch_size)
     print("Coalition values:\n{}".format(v))
     phi = shapley(v, num_parties)
     print("Shapley values:\n{}".format(phi))
