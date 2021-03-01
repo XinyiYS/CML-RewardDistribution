@@ -34,6 +34,8 @@ def main(dataset, split, greed, num_classes, party_data_size, candidate_data_siz
         split,
         greed,
         condition), 'rb'))
+    args = dict(sorted(locals().items()))
+    print("Running with parameters {}".format(args))
 
     # Truncate rewards to maximum achieved v
     for i in range(num_parties):

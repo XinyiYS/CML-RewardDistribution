@@ -1,6 +1,8 @@
 import numpy as np
+import torch
 import gpytorch
 from tqdm import tqdm
+from core.mmd import mmd_neg_unbiased
 
 
 def median_heuristic(data):
@@ -51,5 +53,39 @@ def get_kernel(kernel_name, d, lengthscale):
 
     else:
         raise Exception("Kernel name must be 'se' or 'rq'")
+
+    return kernel
+
+
+def optimize_kernel(kernel, device, party_datasets, reference_dataset, num_epochs=50, batch_size=256):
+    kernel.to(device)
+    optimizer = torch.optim.Adam(kernel.parameters(), lr=0.1)
+
+    party_ds_size = len(party_datasets[0])
+    num_parties = len(party_datasets)
+    party_datasets_tens = torch.tensor(party_datasets, device=device)
+    reference_dataset_tens = torch.tensor(reference_dataset, device=device)
+
+    for epoch in range(num_epochs):
+        for i in range(party_ds_size // batch_size):
+            # Zero gradients from previous iteration
+            optimizer.zero_grad()
+            loss = 0
+
+            idx = (i + 1)
+            next_m = np.min([idx * batch_size, party_ds_size])
+            m = i * batch_size
+
+            ref_idx = np.random.randint(0, len(reference_dataset) - batch_size)
+            next_ref_idx = ref_idx + batch_size
+
+            for party in range(num_parties):
+                loss += mmd_neg_unbiased(party_datasets_tens[party][m:next_m],
+                                         reference_dataset_tens[ref_idx:next_ref_idx],
+                                         kernel)
+
+            # Calc loss and backprop gradients
+            loss.backward()
+            optimizer.step()
 
     return kernel

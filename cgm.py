@@ -4,7 +4,7 @@ from sacred import Experiment
 from sacred.observers import FileStorageObserver
 
 from data.pipeline import get_data_features
-from core.kernel import get_kernel, median_heuristic
+from core.kernel import get_kernel, median_heuristic, optimize_kernel
 from core.reward_calculation import get_v, shapley, get_vN, get_v_is, get_eta_q, get_q_rho
 from core.reward_realization import reward_realization
 from core.utils import norm
@@ -33,6 +33,7 @@ def gmm():
     gamma = '0'
     gpu = True
     batch_size = 2048
+    optimize_kernel_params = True
 
 
 @ex.named_config
@@ -54,6 +55,7 @@ def mnist():
     gamma = '0'
     gpu = True
     batch_size = 2048
+    optimize_kernel_params = True
 
 
 @ex.named_config
@@ -75,6 +77,7 @@ def cifar():
     gamma = '0'
     gpu = True
     batch_size = 2048
+    optimize_kernel_params = True
 
 
 @ex.named_config
@@ -96,11 +99,13 @@ def cifar5():
     gamma = '0'
     gpu = True
     batch_size = 2048
+    optimize_kernel_params = True
 
 
 @ex.automain
 def main(dataset, split, mode, greed, condition, num_parties, num_classes, d, party_data_size,
-         candidate_data_size, perm_samp_high, perm_samp_low, perm_samp_iters, kernel, gamma, gpu, batch_size):
+         candidate_data_size, perm_samp_high, perm_samp_low, perm_samp_iters, kernel, gamma, gpu,
+         batch_size, optimize_kernel_params):
     args = dict(sorted(locals().items()))
     print("Running with parameters {}".format(args))
     run_id = ex.current_run._id
@@ -121,6 +126,9 @@ def main(dataset, split, mode, greed, condition, num_parties, num_classes, d, pa
     print("Calculating median heuristic")
     lengthscale = median_heuristic(reference_dataset)
     kernel = get_kernel(kernel, d, lengthscale)
+    if optimize_kernel_params:
+        print("Optimizing kernel parameters")
+        kernel = optimize_kernel(kernel, device, party_datasets, reference_dataset)
 
     # Reward calculation
     v = get_v(party_datasets, reference_dataset, kernel, device=device, batch_size=128)
