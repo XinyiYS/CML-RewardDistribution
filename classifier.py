@@ -26,6 +26,9 @@ def mnist():
 
 @ex.automain
 def main(dataset, split, greed, num_classes, party_data_size, candidate_data_size, condition, num_parties):
+    args = dict(sorted(locals().items()))
+    print("Running with parameters {}".format(args))
+
     # Get data
     (party_datasets, party_labels, reference_dataset, candidate_datasets,
      candidate_labels, rewards, deltas, mus) = pickle.load(open('data/{}/cgm-results/CGM-{}-{}-greed{}-{}.p'.format(
@@ -34,8 +37,6 @@ def main(dataset, split, greed, num_classes, party_data_size, candidate_data_siz
         split,
         greed,
         condition), 'rb'))
-    args = dict(sorted(locals().items()))
-    print("Running with parameters {}".format(args))
 
     # Truncate rewards to maximum achieved v
     for i in range(num_parties):
