@@ -20,5 +20,3 @@ def sample_GMM(means, covs, num_samples):
         clusters[i] = cluster
 
     return samples, clusters
-
-

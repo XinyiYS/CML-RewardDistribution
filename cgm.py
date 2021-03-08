@@ -5,7 +5,7 @@ from sacred.observers import FileStorageObserver
 
 from data.pipeline import get_data_features
 from core.kernel import get_kernel, median_heuristic, optimize_kernel
-from core.reward_calculation import get_v, shapley, get_vN, get_v_is, get_eta_q, get_q_rho
+from core.reward_calculation import get_v, shapley, get_vN, get_v_is, get_eta_q, get_q_rho, opt_vstar, get_v_maxs
 from core.reward_realization import reward_realization
 from core.utils import norm
 from metrics.class_imbalance import get_classes, class_proportion
@@ -17,10 +17,10 @@ ex.observers.append(FileStorageObserver('runs'))
 @ex.named_config
 def gmm():
     dataset = "gmm"
-    split = "unequal"  # "equaldisjoint" or "unequal"
-    mode = "rho_shapley"
+    split = "equaldisjoint"  # "equaldisjoint" or "unequal"
+    mode = "opt_vstar"
     greed = 1
-    condition = "stable"
+    condition = "all"
     num_parties = 5
     num_classes = 5
     d = 2  # Only for GMM
@@ -40,9 +40,9 @@ def gmm():
 def mnist():
     dataset = "mnist"
     split = "equaldisjoint"  # "equaldisjoint" or "unequal"
-    mode = "rho_shapley"
+    mode = "opt_vstar"
     greed = 2
-    condition = "stable"
+    condition = "all"
     num_parties = 5
     num_classes = 10
     d = 16
@@ -62,9 +62,9 @@ def mnist():
 def cifar():
     dataset = "cifar"
     split = "equaldisjoint"  # "equaldisjoint" or "unequal"
-    mode = "rho_shapley"  # "perm_samp" or "rho_shapley"
+    mode = "opt_vstar"  # "perm_samp" or "rho_shapley"
     greed = 2
-    condition = "stable"
+    condition = "all"
     num_parties = 5
     num_classes = 10
     d = 64
@@ -153,10 +153,16 @@ def main(dataset, split, mode, greed, condition, num_parties, num_classes, d, pa
                                 device=device)
 
         print("Best eta value: {}".format(best_eta))
-
-    if mode == 'rho_shapley':
+    elif mode == 'rho_shapley':
         print("Using rho-Shapley to calculate reward vector")
         q, rho = get_q_rho(alpha, v_is, vN, phi, v, cond='stable')
+        print("rho: {}".format(rho))
+    elif mode == 'opt_vstar':
+        print("Using opt_vstar to calculate reward vector")
+        v_maxs = get_v_maxs(party_datasets, reference_dataset, candidate_datasets[0], kernel, device, batch_size)
+        q, v_star, v_star_frac, rho = opt_vstar(alpha, v_is, v_maxs, phi, v, cond='all')
+        print("v*: {}".format(v_star))
+        print("Fraction of maximum possible v*: {}".format(v_star_frac))
         print("rho: {}".format(rho))
 
     r = list(map(q, alpha))
@@ -189,3 +195,12 @@ def main(dataset, split, mode, greed, condition, num_parties, num_classes, d, pa
     for result in rewards:
         class_props.append(class_proportion(get_classes(np.array(result), candidate_datasets[0], candidate_labels), num_classes))
     print("Class proportions and class imbalance: {}".format(class_props))
+
+    # Save results in convenient place
+    pickle.dump((party_datasets, party_labels, reference_dataset, candidate_datasets, candidate_labels, rewards, deltas, mus, class_props),
+                open("data/{}/cgm-results/CGM-{}-{}-greed{}-{}-run{}.p".format(dataset,
+                                                                               dataset,
+                                                                               split,
+                                                                               greed,
+                                                                               condition,
+                                                                               run_id), "wb"))

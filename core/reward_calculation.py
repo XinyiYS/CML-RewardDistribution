@@ -2,6 +2,7 @@ import numpy as np
 import math
 import itertools
 import scipy.stats
+from scipy.optimize import linprog
 
 from core.mmd import mmd_neg_biased_batched
 
@@ -222,3 +223,45 @@ def get_q_rho(alpha, v_is, vN, phi, v, cond='stable'):
     else:
         raise Exception("cond must be either all or stable")
     return lambda x: x ** rho * vN, rho
+
+
+def opt_vstar(alpha, v_is, v_maxs, phi, v, cond='all', rho_penalty=0.0):
+    """
+
+    :param alpha:
+    :param v_is:
+    :param v_maxs:
+    :param phi:
+    :param v:
+    :param cond:
+    :param rho_penalty: if want rho to be as close to 1 as possible, set to negative
+    :return:
+    """
+    num_parties = len(alpha)
+    A = np.concatenate([np.stack([np.ones(num_parties), np.log(alpha)]).transpose(),
+                        -np.stack([np.ones(num_parties), np.log(alpha)]).transpose(),
+                        np.array([[0, 1],
+                                  [0, -1]])])
+    b = np.concatenate([np.log(v_maxs), -np.log(v_is), [1], [0]])
+    c = np.array([-1, rho_penalty])
+    res = linprog(c=c,
+                  A_ub=A,
+                  b_ub=b,
+                  bounds=(None, None))
+    print(res)
+
+    v_star = np.exp(res.x[0])
+    rho = res.x[1]
+
+    return lambda x: x ** rho * v_star, v_star, v_star / v_maxs[np.argmax(alpha)], rho
+
+
+def get_v_maxs(party_datasets, reference_dataset, candidate_dataset, kernel, device, batch_size):
+    v_maxs = []
+    for party_ds in party_datasets:
+        v_maxs.append(mmd_neg_biased_batched(np.concatenate([party_ds, candidate_dataset], axis=0),
+                                             reference_dataset,
+                                             kernel,
+                                             device,
+                                             batch_size)[0])
+    return v_maxs
