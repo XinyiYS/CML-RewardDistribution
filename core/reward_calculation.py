@@ -244,6 +244,11 @@ def opt_vstar(alpha, v_is, v_maxs, v_Cis, cond='all', rho_penalty=0.0):
     else:
         raise Exception("cond must be either all or stable")
 
+    # Replace any negative numbers by small positive value
+    for i in range(len(v_lowers)):
+        if v_lowers[i] <= 0:
+            v_lowers[i] = 1e-07
+
     num_parties = len(alpha)
     A = np.concatenate([np.stack([np.ones(num_parties), np.log(alpha)]).transpose(),
                         -np.stack([np.ones(num_parties), np.log(alpha)]).transpose(),

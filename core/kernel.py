@@ -24,6 +24,7 @@ def get_kernel(kernel_name, d, lengthscale):
         kernel = gpytorch.kernels.ScaleKernel(gpytorch.kernels.RBFKernel(ard_num_dims=d))
         kernel.base_kernel.lengthscale = [lengthscale for _ in range(d)]
         kernel.outputscale = 1
+        kernel.raw_outputscale.requires_grad = False
     elif kernel_name == 'se_sum':
         kernel01 = gpytorch.kernels.ScaleKernel(gpytorch.kernels.RBFKernel(ard_num_dims=d))
         kernel01.base_kernel.lengthscale = [0.1*lengthscale for _ in range(d)]
@@ -45,9 +46,9 @@ def get_kernel(kernel_name, d, lengthscale):
         rq10.alpha = 10.
         kernel = rq01 + rq1
         kernel.kernels.append(rq10)
-        for k in kernel.kernels:
-            k.raw_alpha.requires_grad = False
-            k.raw_lengthscale.requires_grad = False
+        # for k in kernel.kernels:
+        #     k.raw_alpha.requires_grad = False
+        #     k.raw_lengthscale.requires_grad = False
     else:
         raise Exception("Kernel name must be 'se' or 'se_sum' or 'rq'")
 

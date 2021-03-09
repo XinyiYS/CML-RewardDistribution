@@ -23,12 +23,12 @@ def gmm():
     split = "unequal"  # "equaldisjoint" or "unequal"
     mode = "opt_vstar"
     greed = 1
-    condition = "all"
+    condition = "stable"
     num_parties = 5
     num_classes = 5
     d = 2  # Only for GMM
     party_data_size = 1000
-    candidate_data_size = 10000
+    candidate_data_size = 50000
     perm_samp_high = 0.4
     perm_samp_low = 0.001
     perm_samp_iters = 8
@@ -144,6 +144,8 @@ def main(dataset, split, mode, greed, condition, num_parties, num_classes, d, pa
     v_is = get_v_is(v, num_parties)
     v_Cis = [get_vCi(i, phi, v) for i in range(1, num_parties + 1)]
     print("V_Cis:\n{}".format(v_Cis))
+    v_maxs = get_v_maxs(party_datasets, reference_dataset, candidate_datasets[0], kernel, device, batch_size)
+    print("v_maxs:\n{}".format(v_maxs))
 
     if mode == 'perm_samp':
         print("Using permutation sampling to calculate reward vector")
@@ -164,7 +166,6 @@ def main(dataset, split, mode, greed, condition, num_parties, num_classes, d, pa
         print("rho: {}".format(rho))
     elif mode == 'opt_vstar':
         print("Using opt_vstar to calculate reward vector")
-        v_maxs = get_v_maxs(party_datasets, reference_dataset, candidate_datasets[0], kernel, device, batch_size)
         q, v_star, v_star_frac, rho = opt_vstar(alpha, v_is, v_maxs, v_Cis, cond=condition, rho_penalty=-0.001)
         print("v*: {}".format(v_star))
         print("Fraction of maximum possible v*: {}".format(v_star_frac))
@@ -175,46 +176,46 @@ def main(dataset, split, mode, greed, condition, num_parties, num_classes, d, pa
     r = list(map(q, alpha))
     print("Reward values: \n{}".format(r))
 
-    # Reward realization
-    greeds = np.ones(num_parties) * greed
-    rewards, deltas, mus = reward_realization(candidate_datasets,
-                                              reference_dataset,
-                                              r,
-                                              party_datasets,
-                                              kernel,
-                                              greeds=greeds,
-                                              rel_tol=1e-10,
-                                              device=device,
-                                              batch_size=batch_size)
-
-    # Save results
-    pickle.dump((party_datasets, party_labels, reference_dataset, candidate_datasets, candidate_labels, rewards, deltas, mus),
-                open("runs/{}/CGM-{}-{}-greed{}-{}.p".format(run_id,
-                                                             dataset,
-                                                             split,
-                                                             greed,
-                                                             condition), "wb"))
-
-    print("Results saved successfully")
-    print("Length of rewards: {}".format([len(r) for r in rewards]))
-
-    class_props = []
-    for result in rewards:
-        class_props.append(class_proportion(get_classes(np.array(result), candidate_datasets[0], candidate_labels), num_classes))
-    print("Class proportions and class imbalance: {}".format(class_props))
-
-    # Save results in convenient place
-    pickle.dump((party_datasets, party_labels, reference_dataset, candidate_datasets, candidate_labels, rewards, deltas, mus, class_props),
-                open("data/{}/cgm-results/CGM-{}-{}-greed{}-{}-run{}.p".format(dataset,
-                                                                               dataset,
-                                                                               split,
-                                                                               greed,
-                                                                               condition,
-                                                                               run_id), "wb"))
-
-    print("Reverse KL before: \n{}".format(
-        [dkl(party_datasets[i], reference_dataset) for i in range(num_parties)]
-    ))
-    print("Reverse KL after: \n{}".format(
-        [dkl(np.concatenate([party_datasets[i], np.array(rewards[i])], axis=0), reference_dataset) for i in range(num_parties)]
-    ))
+    # # Reward realization
+    # greeds = np.ones(num_parties) * greed
+    # rewards, deltas, mus = reward_realization(candidate_datasets,
+    #                                           reference_dataset,
+    #                                           r,
+    #                                           party_datasets,
+    #                                           kernel,
+    #                                           greeds=greeds,
+    #                                           rel_tol=1e-10,
+    #                                           device=device,
+    #                                           batch_size=batch_size)
+    #
+    # # Save results
+    # pickle.dump((party_datasets, party_labels, reference_dataset, candidate_datasets, candidate_labels, rewards, deltas, mus),
+    #             open("runs/{}/CGM-{}-{}-greed{}-{}.p".format(run_id,
+    #                                                          dataset,
+    #                                                          split,
+    #                                                          greed,
+    #                                                          condition), "wb"))
+    #
+    # print("Results saved successfully")
+    # print("Length of rewards: {}".format([len(r) for r in rewards]))
+    #
+    # class_props = []
+    # for result in rewards:
+    #     class_props.append(class_proportion(get_classes(np.array(result), candidate_datasets[0], candidate_labels), num_classes))
+    # print("Class proportions and class imbalance: {}".format(class_props))
+    #
+    # # Save results in convenient place
+    # pickle.dump((party_datasets, party_labels, reference_dataset, candidate_datasets, candidate_labels, rewards, deltas, mus, class_props),
+    #             open("data/{}/cgm-results/CGM-{}-{}-greed{}-{}-run{}.p".format(dataset,
+    #                                                                            dataset,
+    #                                                                            split,
+    #                                                                            greed,
+    #                                                                            condition,
+    #                                                                            run_id), "wb"))
+    #
+    # print("Reverse KL before: \n{}".format(
+    #     [dkl(party_datasets[i], reference_dataset) for i in range(num_parties)]
+    # ))
+    # print("Reverse KL after: \n{}".format(
+    #     [dkl(np.concatenate([party_datasets[i], np.array(rewards[i])], axis=0), reference_dataset) for i in range(num_parties)]
+    # ))
