@@ -41,12 +41,10 @@ def mmd_neg_biased_batched(X, Y, k, device, batch_size=128):
     k.to(device)
 
     with torch.no_grad():
-        # first batch
-        S_XY = (2 / (batch_size * n)) * torch.sum(k(X_tens[:batch_size], Y_tens).evaluate())
-        S_X = (1 / (batch_size ** 2)) * torch.sum(k(X_tens[:batch_size]).evaluate())
-
-        for i in range(max_m // batch_size):
-            idx = i + 2
+        S_XY = 0
+        S_X = 0
+        for i in range((max_m // batch_size) + 1):
+            idx = i + 1
             next_m = np.min([idx * batch_size, max_m])
             m = (idx - 1) * batch_size
             S_XY = (m * S_XY + (2 / n) * torch.sum(k(X_tens[m:next_m], Y_tens).evaluate())) / next_m

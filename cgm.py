@@ -5,10 +5,13 @@ from sacred.observers import FileStorageObserver
 
 from data.pipeline import get_data_features
 from core.kernel import get_kernel, median_heuristic, optimize_kernel
-from core.reward_calculation import get_v, shapley, get_vN, get_v_is, get_eta_q, get_q_rho, opt_vstar, get_v_maxs
+from core.reward_calculation import get_v, shapley, get_vN, get_v_is, get_eta_q, get_q_rho, opt_vstar, get_v_maxs, \
+    get_vCi
 from core.reward_realization import reward_realization
 from core.utils import norm
 from metrics.class_imbalance import get_classes, class_proportion
+from metrics.phi_div import dkl
+
 
 ex = Experiment("CGM")
 ex.observers.append(FileStorageObserver('runs'))
@@ -17,7 +20,7 @@ ex.observers.append(FileStorageObserver('runs'))
 @ex.named_config
 def gmm():
     dataset = "gmm"
-    split = "equaldisjoint"  # "equaldisjoint" or "unequal"
+    split = "unequal"  # "equaldisjoint" or "unequal"
     mode = "opt_vstar"
     greed = 1
     condition = "all"
@@ -139,6 +142,8 @@ def main(dataset, split, mode, greed, condition, num_parties, num_classes, d, pa
     print("alpha:\n{}".format(alpha))
     vN = get_vN(v, num_parties)
     v_is = get_v_is(v, num_parties)
+    v_Cis = [get_vCi(i, phi, v) for i in range(1, num_parties + 1)]
+    print("V_Cis:\n{}".format(v_Cis))
 
     if mode == 'perm_samp':
         print("Using permutation sampling to calculate reward vector")
@@ -155,15 +160,17 @@ def main(dataset, split, mode, greed, condition, num_parties, num_classes, d, pa
         print("Best eta value: {}".format(best_eta))
     elif mode == 'rho_shapley':
         print("Using rho-Shapley to calculate reward vector")
-        q, rho = get_q_rho(alpha, v_is, vN, phi, v, cond='stable')
+        q, rho = get_q_rho(alpha, v_is, vN, phi, v, cond=condition)
         print("rho: {}".format(rho))
     elif mode == 'opt_vstar':
         print("Using opt_vstar to calculate reward vector")
         v_maxs = get_v_maxs(party_datasets, reference_dataset, candidate_datasets[0], kernel, device, batch_size)
-        q, v_star, v_star_frac, rho = opt_vstar(alpha, v_is, v_maxs, phi, v, cond='all')
+        q, v_star, v_star_frac, rho = opt_vstar(alpha, v_is, v_maxs, v_Cis, cond=condition, rho_penalty=-0.001)
         print("v*: {}".format(v_star))
         print("Fraction of maximum possible v*: {}".format(v_star_frac))
         print("rho: {}".format(rho))
+    else:
+        raise Exception("mode must be perm_samp, rho_shapley or opt_vstar")
 
     r = list(map(q, alpha))
     print("Reward values: \n{}".format(r))
@@ -204,3 +211,10 @@ def main(dataset, split, mode, greed, condition, num_parties, num_classes, d, pa
                                                                                greed,
                                                                                condition,
                                                                                run_id), "wb"))
+
+    print("Reverse KL before: \n{}".format(
+        [dkl(party_datasets[i], reference_dataset) for i in range(num_parties)]
+    ))
+    print("Reverse KL after: \n{}".format(
+        [dkl(np.concatenate([party_datasets[i], np.array(rewards[i])], axis=0), reference_dataset) for i in range(num_parties)]
+    ))

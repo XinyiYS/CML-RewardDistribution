@@ -225,7 +225,7 @@ def get_q_rho(alpha, v_is, vN, phi, v, cond='stable'):
     return lambda x: x ** rho * vN, rho
 
 
-def opt_vstar(alpha, v_is, v_maxs, phi, v, cond='all', rho_penalty=0.0):
+def opt_vstar(alpha, v_is, v_maxs, v_Cis, cond='all', rho_penalty=0.0):
     """
 
     :param alpha:
@@ -237,17 +237,26 @@ def opt_vstar(alpha, v_is, v_maxs, phi, v, cond='all', rho_penalty=0.0):
     :param rho_penalty: if want rho to be as close to 1 as possible, set to negative
     :return:
     """
+    if cond == 'all':
+        v_lowers = v_is
+    elif cond == 'stable':
+        v_lowers = v_Cis
+    else:
+        raise Exception("cond must be either all or stable")
+
     num_parties = len(alpha)
     A = np.concatenate([np.stack([np.ones(num_parties), np.log(alpha)]).transpose(),
                         -np.stack([np.ones(num_parties), np.log(alpha)]).transpose(),
                         np.array([[0, 1],
                                   [0, -1]])])
-    b = np.concatenate([np.log(v_maxs), -np.log(v_is), [1], [0]])
+
+    b = np.concatenate([np.log(v_maxs), -np.log(v_lowers), [1], [0]])
     c = np.array([-1, rho_penalty])
     res = linprog(c=c,
                   A_ub=A,
                   b_ub=b,
-                  bounds=(None, None))
+                  bounds=(None, None),
+                  method='revised simplex')
     print(res)
 
     v_star = np.exp(res.x[0])
