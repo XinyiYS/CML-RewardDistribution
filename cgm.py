@@ -45,7 +45,7 @@ def mnist():
     split = "equaldisjoint"  # "equaldisjoint" or "unequal"
     mode = "opt_vstar"
     greed = 2
-    condition = "all"
+    condition = "stable"
     num_parties = 5
     num_classes = 10
     d = 16
@@ -67,7 +67,7 @@ def cifar():
     split = "equaldisjoint"  # "equaldisjoint" or "unequal"
     mode = "opt_vstar"  # "perm_samp" or "rho_shapley"
     greed = 2
-    condition = "all"
+    condition = "stable"
     num_parties = 5
     num_classes = 10
     d = 64
