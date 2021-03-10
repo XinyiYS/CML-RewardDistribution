@@ -50,7 +50,7 @@ def mnist():
     num_classes = 10
     d = 16
     party_data_size = 10000
-    candidate_data_size = 40000
+    candidate_data_size = 100000
     perm_samp_high = 0.4
     perm_samp_low = 0.001
     perm_samp_iters = 8
@@ -128,6 +128,7 @@ def main(dataset, split, mode, greed, condition, num_parties, num_classes, d, pa
                                                                                             gamma)
     print("Calculating median heuristic")
     lengthscale = median_heuristic(reference_dataset)
+    print("Median lengthscale: {}".format(lengthscale))
     kernel = get_kernel(kernel, d, lengthscale)
     if optimize_kernel_params:
         print("Optimizing kernel parameters")
@@ -158,7 +159,6 @@ def main(dataset, split, mode, greed, condition, num_parties, num_classes, d, pa
                                 perm_samp_iters,
                                 mode=condition,
                                 device=device)
-
         print("Best eta value: {}".format(best_eta))
     elif mode == 'rho_shapley':
         print("Using rho-Shapley to calculate reward vector")
