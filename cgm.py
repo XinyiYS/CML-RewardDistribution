@@ -127,7 +127,10 @@ def main(dataset, split, mode, greed, condition, num_parties, num_classes, d, pa
                                                                                             split,
                                                                                             gamma)
     print("Calculating median heuristic")
-    lengthscale = median_heuristic(reference_dataset)
+    if dataset == 'mnist':
+        lengthscale = 54.486141523487774  # Precomputed cause takes forever
+    else:
+        lengthscale = median_heuristic(reference_dataset)
     print("Median lengthscale: {}".format(lengthscale))
     kernel = get_kernel(kernel, d, lengthscale)
     if optimize_kernel_params:
