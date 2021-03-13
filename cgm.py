@@ -11,6 +11,7 @@ from core.reward_realization import reward_realization
 from core.utils import norm
 from metrics.class_imbalance import get_classes, class_proportion
 from metrics.phi_div import dkl
+from metrics.wasserstein import wasserstein_2
 
 
 ex = Experiment("CGM")
@@ -70,9 +71,9 @@ def cifar():
     condition = "stable"
     num_parties = 5
     num_classes = 10
-    d = 64
+    d = 16
     party_data_size = 10000
-    candidate_data_size = 40000
+    candidate_data_size = 100000
     perm_samp_high = 0.4
     perm_samp_low = 0.001
     perm_samp_iters = 8
@@ -198,27 +199,37 @@ def main(dataset, split, mode, greed, condition, num_parties, num_classes, d, pa
                                                              split,
                                                              greed,
                                                              condition), "wb"))
-
     print("Results saved successfully")
+
+    # Metrics
     print("Length of rewards: {}".format([len(r) for r in rewards]))
+
+    print("alpha:\n{}".format(alpha))
 
     class_props = []
     for result in rewards:
         class_props.append(class_proportion(get_classes(np.array(result), candidate_datasets[0], candidate_labels), num_classes))
     print("Class proportions and class imbalance: {}".format(class_props))
 
-    # Save results in convenient place
-    pickle.dump((party_datasets, party_labels, reference_dataset, candidate_datasets, candidate_labels, rewards, deltas, mus, class_props),
+    dkl_before = [dkl(party_datasets[i], reference_dataset) for i in range(num_parties)]
+    dkl_after = [dkl(np.concatenate([party_datasets[i], np.array(rewards[i])], axis=0), reference_dataset) for i in range(num_parties)]
+
+    print("Reverse KL before: \n{}".format(dkl_before))
+    print("Reverse KL after: \n{}".format(dkl_after))
+    print("Correlation coefficient with alpha: \n{}".format(np.corrcoef(alpha, dkl_after)))
+
+    wass_before = [wasserstein_2(party_datasets[i], reference_dataset) for i in range(num_parties)]
+    wass_after = [wasserstein_2(np.concatenate([party_datasets[i], np.array(rewards[i])], axis=0), reference_dataset) for i in range(num_parties)]
+    print("Wasserstein-2 before: \n{}".format(wass_before))
+    print("Wasserstein-2 after: \n{}".format(wass_after))
+    print("Correlation coefficient with alpha: \n{}".format(np.corrcoef(alpha, wass_after)))
+
+    # Save results and metrics in convenient place
+    pickle.dump((party_datasets, party_labels, reference_dataset, candidate_datasets, candidate_labels,
+                 rewards, deltas, mus, alpha, class_props, dkl_before, dkl_after, wass_before, wass_after),
                 open("data/{}/cgm-results/CGM-{}-{}-greed{}-{}-run{}.p".format(dataset,
                                                                                dataset,
                                                                                split,
                                                                                greed,
                                                                                condition,
                                                                                run_id), "wb"))
-
-    print("Reverse KL before: \n{}".format(
-        [dkl(party_datasets[i], reference_dataset) for i in range(num_parties)]
-    ))
-    print("Reverse KL after: \n{}".format(
-        [dkl(np.concatenate([party_datasets[i], np.array(rewards[i])], axis=0), reference_dataset) for i in range(num_parties)]
-    ))

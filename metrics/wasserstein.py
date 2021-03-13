@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.linalg import sqrtm
 
 
 def wasserstein_2(P, Q):
@@ -13,4 +14,4 @@ def wasserstein_2(P, Q):
     Q_mean, Q_cov = np.mean(Q, axis=0), np.cov(Q, rowvar=False)
 
     QP_diff = Q_mean - P_mean
-    return np.inner(QP_diff, QP_diff) + np.trace(Q_cov + P_cov - 2 * np.linalg.cholesky(Q_cov @ P_cov))
+    return np.inner(QP_diff, QP_diff) + np.trace(Q_cov + P_cov - 2 * sqrtm(Q_cov @ P_cov))
