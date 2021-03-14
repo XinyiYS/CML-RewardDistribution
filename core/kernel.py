@@ -5,10 +5,13 @@ from tqdm import tqdm
 from core.mmd import mmd_neg_unbiased
 
 
-def median_heuristic(data):
+def median_heuristic(input, num_samples=5000):
     """
-    :param data: array of shape (n, d)
+    :param input: array of shape (n, d)
     """
+    idxs = np.random.permutation(len(input))[:num_samples]
+    data = input[idxs]
+
     n, d = data.shape
     norms = np.zeros(n*(n-1)//2)
     idx = 0
