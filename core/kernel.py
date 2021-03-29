@@ -5,6 +5,40 @@ from tqdm import tqdm
 from core.mmd import mmd_neg_unbiased
 
 
+class SEKernel:
+    """
+    Custom squared exponential kernel parameterized by inverse lengthscale, with variance term = 1
+    """
+    def __init__(self, ard_num_dims, inv_lengthscale_squared, device):
+        self.inv_ls_squared = torch.tensor([inv_lengthscale_squared for _ in range(ard_num_dims)], device=device,
+                                           requires_grad=True, dtype=torch.float32)
+        self.ard_num_dims = ard_num_dims
+        self.device = device
+
+    def __call__(self, X, Y=None):
+        """
+        :param X: torch tensor of size (m, d)
+        :param Y: torch tensor of size (n, d)
+        :return: lazy tensor of size (m, n)
+        """
+        if Y is None:
+            Y = X
+
+        diff_squared = torch.square(torch.unsqueeze(X, 1) - Y)  # tensor of shape (m, n, d)
+        exponent = torch.matmul(diff_squared, self.inv_ls_squared)  # tensor of shape (m, n)
+        return torch.exp(-0.5 * exponent)
+
+    def parameters(self):
+        return [self.inv_ls_squared]
+
+    def set_inv_ls_squared_scalar(self, inv_ls):
+        self.inv_ls_squared = torch.tensor([inv_ls for _ in range(self.ard_num_dims)], device=self.device,
+                                           requires_grad=True, dtype=torch.float32)
+
+    def set_inv_ls_squared(self, inv_ls_squared):
+        self.inv_ls_squared = torch.tensor(inv_ls_squared, device=self.device, requires_grad=True, dtype=torch.float32)
+
+
 def median_heuristic(input, num_samples=5000):
     """
     :param input: array of shape (n, d)
@@ -22,12 +56,9 @@ def median_heuristic(input, num_samples=5000):
     return np.median(norms)
 
 
-def get_kernel(kernel_name, d, lengthscale):
+def get_kernel(kernel_name, d, lengthscale, device):
     if kernel_name == 'se':
-        kernel = gpytorch.kernels.ScaleKernel(gpytorch.kernels.RBFKernel(ard_num_dims=d))
-        kernel.base_kernel.lengthscale = [lengthscale for _ in range(d)]
-        kernel.outputscale = 1
-        kernel.raw_outputscale.requires_grad = False
+        kernel = SEKernel(d, lengthscale, device)
     elif kernel_name == 'se_sum':
         kernel01 = gpytorch.kernels.ScaleKernel(gpytorch.kernels.RBFKernel(ard_num_dims=d))
         kernel01.base_kernel.lengthscale = [0.1*lengthscale for _ in range(d)]
@@ -59,7 +90,6 @@ def get_kernel(kernel_name, d, lengthscale):
 
 
 def optimize_kernel(kernel, device, party_datasets, reference_dataset, num_epochs=50, batch_size=256):
-    kernel.to(device)
     optimizer = torch.optim.Adam(kernel.parameters(), lr=0.1)
 
     party_ds_size = len(party_datasets[0])
