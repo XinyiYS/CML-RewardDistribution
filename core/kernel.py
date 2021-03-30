@@ -4,6 +4,7 @@ import gpytorch
 from tqdm import tqdm
 from core.mmd import mmd_neg_unbiased, mmd_neg_unbiased_batched
 from scipy.optimize import linprog
+import cvxpy as cp
 
 
 class SEKernel:
@@ -251,7 +252,8 @@ def optimize_kernel(k, device, party_datasets, reference_dataset, num_epochs=50,
             #print("Actual grad: {}".format(grad))
             x = cp.Variable(d)
             prob = cp.Problem(cp.Minimize(grad.T @ x),
-                              [reduced_D @ x <= b])
+                              [reduced_D @ x <= b,
+                               x >= 0])
             prob.solve()
             # res = linprog(grad, A_ub=reduced_D, b_ub=b, method='interior-point')
             y_t = x.value
