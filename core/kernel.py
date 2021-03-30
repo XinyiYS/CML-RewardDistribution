@@ -77,7 +77,7 @@ def is_all_above_lb(k, val_points, lb):
     return num_above == len(val_points) ** 2
 
 
-def is_pareto_efficient(costs, return_mask = True):
+def is_pareto_efficient(costs, return_mask=True):
     """
     Find pareto-efficient points. Defined in terms of costs, so returns lowest values. From accepted answer in
     https://stackoverflow.com/questions/32791911/fast-calculation-of-pareto-front-in-python
@@ -90,12 +90,15 @@ def is_pareto_efficient(costs, return_mask = True):
     is_efficient = np.arange(costs.shape[0])
     n_points = costs.shape[0]
     next_point_index = 0  # Next index in the is_efficient array to search for
-    while next_point_index<len(costs):
-        nondominated_point_mask = np.any(costs<costs[next_point_index], axis=1)
-        nondominated_point_mask[next_point_index] = True
-        is_efficient = is_efficient[nondominated_point_mask]  # Remove dominated points
-        costs = costs[nondominated_point_mask]
-        next_point_index = np.sum(nondominated_point_mask[:next_point_index])+1
+    with tqdm(total=len(costs)) as pbar:
+        while next_point_index<len(costs):
+            nondominated_point_mask = np.any(costs<costs[next_point_index], axis=1)
+            nondominated_point_mask[next_point_index] = True
+            is_efficient = is_efficient[nondominated_point_mask]  # Remove dominated points
+            costs = costs[nondominated_point_mask]
+            next_point_index = np.sum(nondominated_point_mask[:next_point_index])+1
+            pbar.set_postfix(num_is_efficient=len(is_efficient))
+            pbar.update(1)
     if return_mask:
         is_efficient_mask = np.zeros(n_points, dtype = bool)
         is_efficient_mask[is_efficient] = True
@@ -154,7 +157,7 @@ def optimize_kernel(k, device, party_datasets, reference_dataset, num_epochs=50,
     lb = nonneg_lb(n, S, 1)
 
     # Select num_val_points random points to check k(x_i, x_j) > lb
-    num_val_points = 2000
+    num_val_points = 500
     val_points = torch.tensor(reference_dataset[np.random.permutation(np.arange(num_val_points))], device=device,
                               dtype=torch.float32)
     val_points_np = val_points.cpu().numpy()
@@ -165,6 +168,7 @@ def optimize_kernel(k, device, party_datasets, reference_dataset, num_epochs=50,
     squared_diff_idxs = \
     np.where((np.triu(np.ones((num_val_points, num_val_points))) - np.diag(np.ones(num_val_points))).flatten())[0]
     squared_diffs_reduced = squared_diffs[squared_diff_idxs]
+    print("Calculating Pareto optimal differences")
     reduced_D = squared_diffs_reduced[is_pareto_efficient(-squared_diffs_reduced)]
 
     # Upper bound for linear program in Frank-Wolfe algorithm
