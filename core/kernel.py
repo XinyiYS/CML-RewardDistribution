@@ -249,8 +249,12 @@ def optimize_kernel(k, device, party_datasets, reference_dataset, num_epochs=50,
             # change gradients to argmin x \in C <grad, x>
             grad = k.inv_ls_squared.grad.cpu().numpy()
             #print("Actual grad: {}".format(grad))
-            res = linprog(grad, A_ub=reduced_D, b_ub=b, method='interior-point')
-            y_t = res['x']
+            x = cp.Variable(d)
+            prob = cp.Problem(cp.Minimize(grad.T @ x),
+                              [reduced_D @ x <= b])
+            prob.solve()
+            # res = linprog(grad, A_ub=reduced_D, b_ub=b, method='interior-point')
+            y_t = x.value
             #print("y_t: {}".format(y_t))
             #print("inv_ls_squared: {}".format(k.inv_ls_squared))
 
