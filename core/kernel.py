@@ -174,6 +174,33 @@ def optimize_kernel(k, device, party_datasets, reference_dataset, num_epochs=50,
     # Upper bound for linear program in Frank-Wolfe algorithm
     b = (-2 * np.log(lb)) * np.ones(len(reduced_D), dtype=np.float32)
 
+    # Ensure we start within feasible set
+    # Do a binary search for a good value of inv_ls_squared, low but above upper bound
+    num_iters = 20
+    low = 0.01
+    high = 1000
+
+    # Check bounds
+    k.set_inv_ls_squared_scalar(low)
+    if not is_all_above_lb(k, val_points, lb):
+        raise Exception("Low value of inv_ls_squared is already invalid")
+
+    k.set_inv_ls_squared_scalar(high)
+    if is_all_above_lb(k, val_points, lb):
+        raise Exception("High value of inv_ls_squared is still valid, can be pushed higher")
+
+    for i in range(num_iters):
+        mid = (high + low) / 2
+        k.set_inv_ls_squared_scalar(mid)
+        if is_all_above_lb(k, val_points, lb):
+            low = mid
+        else:
+            high = mid
+
+    k.set_inv_ls_squared_scalar(low)
+    print("Optimal inverse lengthscale squared: {}".format(low))
+
+
     # Frank-Wolfe conditional gradient algorithm
     optimizer = torch.optim.SGD(k.parameters(), lr=0.1)
     t = 0

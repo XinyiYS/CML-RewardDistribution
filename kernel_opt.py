@@ -51,7 +51,7 @@ def mnist():
     gpu = True
     batch_size = 2048
     optimize_kernel_params = True
-    num_pareto_val_points = 250
+    num_pareto_val_points = 200
 
 
 @ex.named_config
@@ -74,7 +74,7 @@ def cifar():
     gpu = True
     batch_size = 2048
     optimize_kernel_params = True
-    num_pareto_val_points = 250
+    num_pareto_val_points = 200
 
 
 @ex.automain
