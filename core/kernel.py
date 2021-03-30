@@ -140,7 +140,8 @@ def get_kernel(kernel_name, d, lengthscale, device):
     return kernel
 
 
-def optimize_kernel(k, device, party_datasets, reference_dataset, num_epochs=50, batch_size=128):
+def optimize_kernel(k, device, party_datasets, reference_dataset, num_epochs=50,
+                    batch_size=128, num_val_points=2000):
     # Data setup
     n = len(reference_dataset)
     S = np.min([len(ds) for ds in party_datasets])
@@ -157,7 +158,6 @@ def optimize_kernel(k, device, party_datasets, reference_dataset, num_epochs=50,
     lb = nonneg_lb(n, S, 1)
 
     # Select num_val_points random points to check k(x_i, x_j) > lb
-    num_val_points = 500
     val_points = torch.tensor(reference_dataset[np.random.permutation(np.arange(num_val_points))], device=device,
                               dtype=torch.float32)
     val_points_np = val_points.cpu().numpy()

@@ -28,6 +28,7 @@ def gmm():
     gpu = True
     batch_size = 2048
     optimize_kernel_params = True
+    num_pareto_val_points = 2000
 
 
 @ex.named_config
@@ -50,6 +51,7 @@ def mnist():
     gpu = True
     batch_size = 2048
     optimize_kernel_params = True
+    num_pareto_val_points = 250
 
 
 @ex.named_config
@@ -72,12 +74,13 @@ def cifar():
     gpu = True
     batch_size = 2048
     optimize_kernel_params = True
+    num_pareto_val_points = 250
 
 
 @ex.automain
 def main(dataset, split, mode, greed, condition, num_parties, num_classes, d, party_data_size,
          candidate_data_size, perm_samp_high, perm_samp_low, perm_samp_iters, kernel, gamma, gpu,
-         batch_size, optimize_kernel_params):
+         batch_size, optimize_kernel_params, num_pareto_val_points):
     args = dict(sorted(locals().items()))
     print("Running with parameters {}".format(args))
     run_id = ex.current_run._id
@@ -96,4 +99,5 @@ def main(dataset, split, mode, greed, condition, num_parties, num_classes, d, pa
                                                                                                               split)
 
     kernel = get_kernel(kernel, d, 1., device)
-    kernel = optimize_kernel(kernel, device, party_datasets, reference_dataset, batch_size=64)
+    kernel = optimize_kernel(kernel, device, party_datasets, reference_dataset,
+                             batch_size=64, num_val_points=num_pareto_val_points)
