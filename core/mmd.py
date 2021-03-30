@@ -70,3 +70,29 @@ def mmd_neg_unbiased(X, Y, k):
     S_Y = (1 / (n * (n-1))) * (torch.sum(k(Y)) - torch.sum(torch.diag(k(Y))))
 
     return S_XY - S_X - S_Y
+
+
+def mmd_neg_unbiased_batched(X, Y, k, batch_size=128):
+    max_m = X.size(0)
+    max_n = Y.size(0)
+
+    with torch.no_grad():
+        S_XY = 0
+        S_X = 0
+        S_Y = 0
+        for i in range((max_m // batch_size) + 1):
+            idx = i + 1
+            next_m = np.min([idx * batch_size, max_m])
+            m = (idx - 1) * batch_size
+            S_XY = (m * S_XY + (2 / max_n) * torch.sum(k(X[m:next_m], Y))) / next_m
+            S_X = ((m * (m-1)) * S_X + 2 * torch.sum(k(X[m:next_m], X[:m])) +
+                   torch.sum(k(X[m:next_m])) - torch.sum(torch.diag(k(X[m:next_m])))) / (next_m * (next_m-1))
+
+        for i in range((max_n // batch_size) + 1):
+            idx = i + 1
+            next_n = np.min([idx * batch_size, max_n])
+            n = (idx - 1) * batch_size
+            S_Y = ((n * (n-1)) * S_Y + 2 * torch.sum(k(Y[n:next_n], Y[:n])) +
+                   torch.sum(k(Y[n:next_n])) - torch.sum(torch.diag(k(Y[n:next_n])))) / (next_n * (next_n-1))
+
+    return S_XY - S_X - S_Y

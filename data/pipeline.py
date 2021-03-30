@@ -32,7 +32,7 @@ def get_proportions(split, dataset):
                              [0.005, 0.005, 0.005, 0.005, 0.005, 0.005, 0.195, 0.195, 0.290, 0.290]])
 
 
-def get_data_features(dataset, num_classes, d, num_parties, party_data_size, candidate_data_size, split, gamma):
+def get_data_features(dataset, num_classes, d, num_parties, party_data_size, candidate_data_size, split):
     prop = get_proportions(split, dataset)
 
     if dataset == 'gmm':
@@ -55,10 +55,10 @@ def get_data_features(dataset, num_classes, d, num_parties, party_data_size, can
 
     elif dataset == 'mnist' or dataset == 'cifar' or dataset=='cifar5':
         np.random.seed(0)
-        party_datasets = np.load("data/{}/{}-gamma{}-party_features.npy".format(dataset, split, gamma))
-        party_labels = np.load("data/{}/{}-gamma{}-party_labels.npy".format(dataset, split, gamma))
-        candidate_dataset = np.load("data/{}/{}-gamma{}-cand_features.npy".format(dataset, split, gamma))
-        candidate_labels = np.load("data/{}/{}-gamma{}-cand_labels.npy".format(dataset, split, gamma))
+        party_datasets = np.load("data/{}/{}-party_features.npy".format(dataset, split))
+        party_labels = np.load("data/{}/{}-party_labels.npy".format(dataset, split))
+        candidate_dataset = np.load("data/{}/{}-cand_features.npy".format(dataset, split))
+        candidate_labels = np.load("data/{}/{}-cand_labels.npy".format(dataset, split))
 
         candidate_datasets = np.array([candidate_dataset] * num_parties)
 

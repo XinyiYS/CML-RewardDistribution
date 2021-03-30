@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import gpytorch
 from tqdm import tqdm
-from core.mmd import mmd_neg_unbiased
+from core.mmd import mmd_neg_unbiased, mmd_neg_unbiased_batched
 from scipy.optimize import linprog
 
 
@@ -137,7 +137,7 @@ def get_kernel(kernel_name, d, lengthscale, device):
     return kernel
 
 
-def optimize_kernel(k, device, party_datasets, reference_dataset, num_epochs=50, batch_size=256):
+def optimize_kernel(k, device, party_datasets, reference_dataset, num_epochs=50, batch_size=128):
     # Data setup
     n = len(reference_dataset)
     S = np.min([len(ds) for ds in party_datasets])
@@ -182,7 +182,7 @@ def optimize_kernel(k, device, party_datasets, reference_dataset, num_epochs=50,
         print("========= Test -MMD unbiased ===========")
         stats = []
         for i in range(num_parties):
-            stat = mmd_neg_unbiased(party_datasets_test[i], reference_dataset_tens, k).cpu().detach().numpy()
+            stat = mmd_neg_unbiased_batched(party_datasets_test[i], reference_dataset_tens, k).cpu().detach().numpy()
             print("Party {}: {}".format(i + 1, stat))
             stats.append(stat)
         avg = np.mean(stats)
