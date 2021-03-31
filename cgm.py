@@ -48,7 +48,7 @@ def mnist():
     condition = "stable"
     num_parties = 5
     num_classes = 10
-    d = 16
+    d = 8
     party_data_size = 10000
     candidate_data_size = 100000
     perm_samp_high = 0.4
@@ -69,7 +69,7 @@ def cifar():
     condition = "stable"
     num_parties = 5
     num_classes = 10
-    d = 16
+    d = 8
     party_data_size = 10000
     candidate_data_size = 100000
     perm_samp_high = 0.4
