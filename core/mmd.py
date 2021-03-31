@@ -16,8 +16,8 @@ def mmd_neg_biased(X, Y, k):
     X_tens = torch.tensor(X, dtype=torch.float32)
     Y_tens = torch.tensor(Y, dtype=torch.float32)
 
-    S_X = (1 / (m ** 2)) * torch.sum(k(X_tens))
-    S_XY = (2 / (m * n)) * torch.sum(k(X_tens, Y_tens))
+    S_X = (1 / (m ** 2)) * torch.sum(k(X_tens).evaluate())
+    S_XY = (2 / (m * n)) * torch.sum(k(X_tens, Y_tens).evaluate())
 
     return (S_XY - S_X).item(), S_X.item(), S_XY.item()
 
@@ -46,9 +46,9 @@ def mmd_neg_biased_batched(X, Y, k, device, batch_size=128):
             idx = i + 1
             next_m = np.min([idx * batch_size, max_m])
             m = (idx - 1) * batch_size
-            S_XY = (m * S_XY + (2 / n) * torch.sum(k(X_tens[m:next_m], Y_tens))) / next_m
-            S_X = ((m ** 2) * S_X + 2 * torch.sum(k(X_tens[m:next_m], X_tens[:m])) +
-                   torch.sum(k(X_tens[m:next_m]))) / (next_m ** 2)
+            S_XY = (m * S_XY + (2 / n) * torch.sum(k(X_tens[m:next_m], Y_tens).evaluate())) / next_m
+            S_X = ((m ** 2) * S_X + 2 * torch.sum(k(X_tens[m:next_m], X_tens[:m]).evaluate()) +
+                   torch.sum(k(X_tens[m:next_m]).evaluate())) / (next_m ** 2)
 
     return (S_XY - S_X).item(), S_X.item(), S_XY.item()
 
@@ -64,9 +64,9 @@ def mmd_neg_unbiased(X, Y, k):
     m = X.size(0)
     n = Y.size(0)
 
-    S_X = (1 / (m * (m-1))) * (torch.sum(k(X)) - torch.sum(torch.diag(k(X))))
-    S_XY = (2 / (m * n)) * torch.sum(k(X, Y))
-    S_Y = (1 / (n * (n-1))) * (torch.sum(k(Y)) - torch.sum(torch.diag(k(Y))))
+    S_X = (1 / (m * (m-1))) * (torch.sum(k(X).evaluate()) - torch.sum(torch.diag(k(X).evaluate())))
+    S_XY = (2 / (m * n)) * torch.sum(k(X, Y).evaluate())
+    S_Y = (1 / (n * (n-1))) * (torch.sum(k(Y).evaluate()) - torch.sum(torch.diag(k(Y).evaluate())))
 
     return S_XY - S_X - S_Y
 
@@ -83,15 +83,15 @@ def mmd_neg_unbiased_batched(X, Y, k, batch_size=128):
             idx = i + 1
             next_m = np.min([idx * batch_size, max_m])
             m = (idx - 1) * batch_size
-            S_XY = (m * S_XY + (2 / max_n) * torch.sum(k(X[m:next_m], Y))) / next_m
-            S_X = ((m * (m-1)) * S_X + 2 * torch.sum(k(X[m:next_m], X[:m])) +
-                   torch.sum(k(X[m:next_m])) - torch.sum(torch.diag(k(X[m:next_m])))) / (next_m * (next_m-1))
+            S_XY = (m * S_XY + (2 / max_n) * torch.sum(k(X[m:next_m], Y).evaluate())) / next_m
+            S_X = ((m * (m-1)) * S_X + 2 * torch.sum(k(X[m:next_m], X[:m]).evaluate()) +
+                   torch.sum(k(X[m:next_m]).evaluate()) - torch.sum(torch.diag(k(X[m:next_m]).evaluate()))) / (next_m * (next_m-1))
 
         for i in range((max_n // batch_size) + 1):
             idx = i + 1
             next_n = np.min([idx * batch_size, max_n])
             n = (idx - 1) * batch_size
-            S_Y = ((n * (n-1)) * S_Y + 2 * torch.sum(k(Y[n:next_n], Y[:n])) +
-                   torch.sum(k(Y[n:next_n])) - torch.sum(torch.diag(k(Y[n:next_n])))) / (next_n * (next_n-1))
+            S_Y = ((n * (n-1)) * S_Y + 2 * torch.sum(k(Y[n:next_n], Y[:n]).evaluate()) +
+                   torch.sum(k(Y[n:next_n]).evaluate()) - torch.sum(torch.diag(k(Y[n:next_n]).evaluate()))) / (next_n * (next_n-1))
 
     return S_XY - S_X - S_Y

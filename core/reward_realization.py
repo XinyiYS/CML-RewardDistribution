@@ -27,10 +27,10 @@ def v_update_batch(x, X, Y, S_X, S_XY, k):
     n = Y.shape[0]
 
     S_X_update = ((m ** 2) / ((m + 1) ** 2)) * S_X + \
-                 (2 / ((m + 1) ** 2)) * torch.sum(k(x_tens, X_tens), axis=1) + \
-                 (1 / ((m + 1) ** 2)) * torch.diag(k(x_tens))
+                 (2 / ((m + 1) ** 2)) * torch.sum(k(x_tens, X_tens).evaluate(), axis=1) + \
+                 (1 / ((m + 1) ** 2)) * torch.diag(k(x_tens).evaluate())
 
-    S_XY_update = (m / (m + 1)) * S_XY + (2 / (n * (m + 1))) * torch.sum(k(x_tens, Y_tens), axis=1)
+    S_XY_update = (m / (m + 1)) * S_XY + (2 / (n * (m + 1))) * torch.sum(k(x_tens, Y_tens).evaluate(), axis=1)
 
     S_X_arr = S_X_update.detach().numpy()
     S_XY_arr = S_XY_update.detach().numpy()
@@ -69,9 +69,9 @@ def v_update_batch_iter(x, X, Y, S_X, S_XY, k, device, batch_size=2048):
             end = (i + 1) * batch_size
 
             S_X_update = ((m ** 2) / ((m + 1) ** 2)) * S_X + \
-                         (2 / ((m + 1) ** 2)) * torch.sum(k(x_tens[start:end], X_tens), axis=1) + (1 / ((m + 1) ** 2)) * torch.diag(k(x_tens[start:end]))
+                         (2 / ((m + 1) ** 2)) * torch.sum(k(x_tens[start:end], X_tens).evaluate(), axis=1) + (1 / ((m + 1) ** 2)) * torch.diag(k(x_tens[start:end]).evaluate())
 
-            S_XY_update = (m / (m + 1)) * S_XY + (2 / (n * (m + 1))) * torch.sum(k(x_tens[start:end], Y_tens), axis=1)
+            S_XY_update = (m / (m + 1)) * S_XY + (2 / (n * (m + 1))) * torch.sum(k(x_tens[start:end], Y_tens).evaluate(), axis=1)
 
             S_X_arr[start:end] = S_X_update.cpu().detach().numpy()
             S_XY_arr[start:end] = S_XY_update.cpu().detach().numpy()

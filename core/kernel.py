@@ -110,7 +110,9 @@ def is_pareto_efficient(costs, return_mask=True):
 
 def get_kernel(kernel_name, d, lengthscale, device):
     if kernel_name == 'se':
-        kernel = SEKernel(d, lengthscale, device)
+        kernel = gpytorch.kernels.RBFKernel(ard_num_dims=d)
+        kernel.lengthscale = [lengthscale for _ in range(d)]
+        kernel.to(device)
     elif kernel_name == 'se_sum':
         kernel01 = gpytorch.kernels.ScaleKernel(gpytorch.kernels.RBFKernel(ard_num_dims=d))
         kernel01.base_kernel.lengthscale = [0.1*lengthscale for _ in range(d)]
