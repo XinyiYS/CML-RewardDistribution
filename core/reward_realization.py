@@ -7,7 +7,7 @@ from core.utils import union, MaxHeap
 from core.mmd import mmd_neg_biased_batched
 
 
-def v_update_batch(x, X, Y_tens, S_X, S_XY, k, device):
+def v_update_batch(x, X_tens, Y_tens, S_X, S_XY, k, device):
     """
     Calculates v when we add a batch of points to a set with an already calculated v. Updating one point like this takes
     linear time instead of quadratic time by naively redoing the entire calculation.
@@ -21,9 +21,7 @@ def v_update_batch(x, X, Y_tens, S_X, S_XY, k, device):
     """
     with torch.no_grad():
         x_tens = torch.tensor(x, device=device)
-        X_tens = torch.tensor(X, device=device)
-
-        m = X.shape[0]
+        m = X_tens.size()[0]
         n = Y_tens.size()[0]
 
         S_X_update = ((m ** 2) / ((m + 1) ** 2)) * S_X + \
@@ -37,7 +35,7 @@ def v_update_batch(x, X, Y_tens, S_X, S_XY, k, device):
 
         current_v = S_XY_arr - S_X_arr
 
-    return current_v, S_X_arr, S_XY_arr
+    return current_v.item(), S_X_arr, S_XY_arr
 
 
 def v_update_batch_iter(x, X, Y, S_X, S_XY, k, device, batch_size=2048):
@@ -101,30 +99,30 @@ def greedy(G, D, Y, kernel, device, batch_size):
 
     with torch.no_grad():
         Y_tens = torch.tensor(Y, device=device)
-        with trange(m) as t:
-            for i in t:
-                t.set_description('Adding points')
-                added = False
-                while added is False:
-                    _, x = maxheap.heappop()
-                    v_new, S_X_temp, S_XY_temp = v_update_batch(x, union(D, R_i), Y_tens, S_X, S_XY, kernel, device)
-                    delta = v_new - v
-                    if len(maxheap.h) == 0 or delta >= maxheap[0][0]:
-                        R_i.append(np.squeeze(x))
-                        v += delta
-                        deltas.append(delta)
-                        vs.append(v)
-                        S_X = S_X_temp
-                        S_XY = S_XY_temp
-                        added = True
-                        t.set_postfix(point=x, delta=delta, v=v)
-                    else:
-                        maxheap.heappush((delta, x))
+        for i in range(m):
+            added = False
+            D_R_i = torch.tensor(union(D, R_i), device=device)
+            while added is False:
+                _, x = maxheap.heappop()
+                v_new, S_X_temp, S_XY_temp = v_update_batch(x, D_R_i, Y_tens, S_X, S_XY, kernel, device)
+                delta = v_new - v
+                if len(maxheap.h) == 0 or delta >= maxheap[0][0]:
+                    print("Added a point")
+                    R_i.append(np.squeeze(x))
+                    v += delta
+                    deltas.append(delta)
+                    vs.append(v)
+                    S_X = S_X_temp
+                    S_XY = S_XY_temp
+                    added = True
+                else:
+                    print("Pushing on to heap")
+                    maxheap.heappush((delta, x))
 
-                if delta <= 0:  # Exit condition
-                    break
-                if len(maxheap.h) == 0:
-                    raise Exception('Max-heap is empty!')
+            if delta <= 0:  # Exit condition
+                break
+            if len(maxheap.h) == 0:
+                raise Exception('Max-heap is empty!')
 
     print("Maximum v attained is {}".format(v))
 
