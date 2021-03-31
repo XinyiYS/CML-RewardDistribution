@@ -65,6 +65,11 @@ def get_data_features(dataset, num_classes, d, num_parties, party_data_size, can
     else:
         raise Exception("Parameter dataset must be 'gmm', 'mnist', 'cifar' or 'cifar5'")
 
+    # If party_data_size or candidate_data_size are lower than actual, trim data
+    for i in range(num_parties):
+        party_datasets[i] = party_datasets[i, :party_data_size]
+        candidate_datasets[i] = candidate_datasets[i, :candidate_data_size]
+
     # Reference dataset
     all_parties_dataset = np.concatenate(party_datasets)
     reference_dataset = np.concatenate([all_parties_dataset, candidate_datasets[0]], axis=0)
