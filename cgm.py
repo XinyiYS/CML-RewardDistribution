@@ -34,10 +34,9 @@ def gmm():
     perm_samp_low = 0.001
     perm_samp_iters = 8
     kernel = 'se'
-    gamma = '0'
     gpu = True
     batch_size = 2048
-    optimize_kernel_params = True
+    optimize_kernel_params = False
 
 
 @ex.named_config
@@ -56,10 +55,9 @@ def mnist():
     perm_samp_low = 0.001
     perm_samp_iters = 8
     kernel = 'se'
-    gamma = '0'
     gpu = True
     batch_size = 2048
-    optimize_kernel_params = True
+    optimize_kernel_params = False
 
 
 @ex.named_config
@@ -77,38 +75,15 @@ def cifar():
     perm_samp_high = 0.4
     perm_samp_low = 0.001
     perm_samp_iters = 8
-    kernel = 'se_sum'
-    gamma = '0'
+    kernel = 'se'
     gpu = True
     batch_size = 2048
-    optimize_kernel_params = True
-
-
-@ex.named_config
-def cifar5():
-    dataset = "cifar5"
-    split = "equaldisjoint"  # "equaldisjoint" or "unequal"
-    mode = "rho_shapley"  # "perm_samp" or "rho_shapley"
-    greed = 2
-    condition = "stable"
-    num_parties = 5
-    num_classes = 5
-    d = 64
-    party_data_size = 5000
-    candidate_data_size = 20000
-    perm_samp_high = 0.4
-    perm_samp_low = 0.001
-    perm_samp_iters = 8
-    kernel = 'se_sum'
-    gamma = '0'
-    gpu = True
-    batch_size = 2048
-    optimize_kernel_params = True
+    optimize_kernel_params = False
 
 
 @ex.automain
 def main(dataset, split, mode, greed, condition, num_parties, num_classes, d, party_data_size,
-         candidate_data_size, perm_samp_high, perm_samp_low, perm_samp_iters, kernel, gamma, gpu,
+         candidate_data_size, perm_samp_high, perm_samp_low, perm_samp_iters, kernel, gpu,
          batch_size, optimize_kernel_params):
     args = dict(sorted(locals().items()))
     print("Running with parameters {}".format(args))
@@ -125,18 +100,31 @@ def main(dataset, split, mode, greed, condition, num_parties, num_classes, d, pa
                                                                                             num_parties,
                                                                                             party_data_size,
                                                                                             candidate_data_size,
-                                                                                            split,
-                                                                                            gamma)
-    # print("Calculating median heuristic")
-    # if dataset == 'mnist':
-    #     lengthscale = 54.486141523487774  # Precomputed cause takes forever
-    # else:
-    #     lengthscale = median_heuristic(reference_dataset)
-    # print("Median lengthscale: {}".format(lengthscale))
+                                                                                            split)
+
     kernel = get_kernel(kernel, d, 1., device)
     if optimize_kernel_params:
         print("Optimizing kernel parameters")
         kernel = optimize_kernel(kernel, device, party_datasets, reference_dataset)
+    else:  # Use precomputed inverse lengthscales to save time
+        if dataset == 'gmm':
+            if split == 'unequal':
+                kernel.set_inv_ls_squared([2.2049, 1.0718])
+            elif split == 'equaldisjoint':
+                kernel.set_inv_ls_squared([2.1063, 1.0573])
+        elif dataset == 'mnist':
+            if split == 'unequal':
+                kernel.set_inv_ls_squared([0.0027, 0.0202, 0.0017, 0.0277, 0.0121, 0.0010, 0.0513, 0.0071])
+            elif split == 'equaldisjoint':
+                kernel.set_inv_ls_squared([0.0047, 0.0149, 0.0069, 0.0216, 0.0261, 0.0211, 0.0538, 0.0410])
+        elif dataset == 'cifar':
+            if split == 'unequal':
+                kernel.set_inv_ls_squared([0.0166, 0.0093, 0.0027, 0.0005, 0.0888, 0.0289, 0.2482, 0.1091])
+            elif split == 'equaldisjoint':
+                kernel.set_inv_ls_squared([2.5984e-02, 9.1558e-05, 1.1350e-06, 3.9977e-04, 9.2788e-02, 1.7913e-02,
+                                           2.2021e-03, 6.0790e-02])
+        else:
+            raise Exception("Tried to use precomputed inverse lengthscales but received invalid dataset")
 
     # Reward calculation
     v = get_v(party_datasets, reference_dataset, kernel, device=device, batch_size=batch_size)
