@@ -36,7 +36,7 @@ def gmm():
     kernel = 'se'
     gpu = True
     batch_size = 2048
-    optimize_kernel_params = False
+    optimize_kernel_params = True
 
 
 @ex.named_config
@@ -57,7 +57,7 @@ def mnist():
     kernel = 'se'
     gpu = True
     batch_size = 256
-    optimize_kernel_params = False
+    optimize_kernel_params = True
 
 
 @ex.named_config
@@ -78,7 +78,7 @@ def cifar():
     kernel = 'se'
     gpu = True
     batch_size = 256
-    optimize_kernel_params = False
+    optimize_kernel_params = True
 
 
 @ex.automain
@@ -105,27 +105,7 @@ def main(dataset, split, mode, greed, condition, num_parties, num_classes, d, pa
     kernel = get_kernel(kernel, d, 1., device)
     if optimize_kernel_params:
         print("Optimizing kernel parameters")
-        # WARNING DO NOT USE THIS IF KERNEL IS NOT CUSTOM INVERSE LENGTHSCALE SQUARED KERNEL
-        # kernel = optimize_kernel(kernel, device, party_datasets, reference_dataset)
-    else:  # Use precomputed inverse lengthscales to save time
-        if dataset == 'gmm':
-            if split == 'unequal':
-                kernel.lengthscale = np.sqrt(1 / np.array([2.2049, 1.0718]))
-            elif split == 'equaldisjoint':
-                kernel.lengthscale = np.sqrt(1 / np.array([2.1063, 1.0573]))
-        elif dataset == 'mnist':
-            if split == 'unequal':
-                kernel.lengthscale = np.sqrt(1 / np.array([0.0027, 0.0202, 0.0017, 0.0277, 0.0121, 0.0010, 0.0513, 0.0071]))
-            elif split == 'equaldisjoint':
-                kernel.lengthscale = np.sqrt(1 / np.array([0.0047, 0.0149, 0.0069, 0.0216, 0.0261, 0.0211, 0.0538, 0.0410]))
-        elif dataset == 'cifar':
-            if split == 'unequal':
-                kernel.lengthscale = np.sqrt(1 / np.array([0.0166, 0.0093, 0.0027, 0.0005, 0.0888, 0.0289, 0.2482, 0.1091]))
-            elif split == 'equaldisjoint':
-                kernel.lengthscale = np.sqrt(1 / np.array([2.5984e-02, 9.1558e-05, 1.1350e-06, 3.9977e-04, 9.2788e-02, 1.7913e-02,
-                                           2.2021e-03, 6.0790e-02]))
-        else:
-            raise Exception("Tried to use precomputed inverse lengthscales but received invalid dataset")
+        kernel = optimize_kernel(kernel, device, party_datasets, reference_dataset)
 
     # Reward calculation
     v = get_v(party_datasets, reference_dataset, kernel, device=device, batch_size=batch_size)
