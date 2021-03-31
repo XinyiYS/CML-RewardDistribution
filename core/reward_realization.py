@@ -32,8 +32,8 @@ def v_update_batch(x, X, Y, S_X, S_XY, k, device):
 
     S_XY_update = (m / (m + 1)) * S_XY + (2 / (n * (m + 1))) * torch.sum(k(x_tens, Y_tens).evaluate(), axis=1)
 
-    S_X_arr = S_X_update.detach().numpy()
-    S_XY_arr = S_XY_update.detach().numpy()
+    S_X_arr = S_X_update
+    S_XY_arr = S_XY_update
 
     current_v = S_XY_arr - S_X_arr
 
