@@ -7,7 +7,7 @@ from core.utils import union, MaxHeap
 from core.mmd import mmd_neg_biased_batched
 
 
-def v_update_batch(x, X, Y, S_X, S_XY, k):
+def v_update_batch(x, X, Y, S_X, S_XY, k, device):
     """
     Calculates v when we add a batch of points to a set with an already calculated v. Updating one point like this takes
     linear time instead of quadratic time by naively redoing the entire calculation.
@@ -19,9 +19,9 @@ def v_update_batch(x, X, Y, S_X, S_XY, k):
     :param k: GPyTorch kernel
     :return: MMD^2, A, B, all arrays of size (z)
     """
-    x_tens = torch.tensor(x)
-    X_tens = torch.tensor(X)
-    Y_tens = torch.tensor(Y)
+    x_tens = torch.tensor(x, device=device)
+    X_tens = torch.tensor(X, device=device)
+    Y_tens = torch.tensor(Y, device=device)
 
     m = X.shape[0]
     n = Y.shape[0]
@@ -106,7 +106,7 @@ def greedy(G, D, Y, kernel, device, batch_size):
 
             while added is False:
                 _, x = maxheap.heappop()
-                v_new, S_X_temp, S_XY_temp = v_update_batch(x, union(D, R_i), Y, S_X, S_XY, kernel)
+                v_new, S_X_temp, S_XY_temp = v_update_batch(x, union(D, R_i), Y, S_X, S_XY, kernel, device)
                 delta = v_new - v
                 if len(maxheap.h) == 0 or delta >= maxheap[0][0]:
                     R_i.append(np.squeeze(x))
