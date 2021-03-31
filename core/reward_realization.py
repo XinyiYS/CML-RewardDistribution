@@ -1,9 +1,9 @@
 import numpy as np
 import torch
 from scipy.special import softmax
-from tqdm import tqdm
+from tqdm import tqdm, trange
 
-from core.utils import union
+from core.utils import union, MaxHeap
 from core.mmd import mmd_neg_biased_batched
 
 
@@ -79,6 +79,55 @@ def v_update_batch_iter(x, X, Y, S_X, S_XY, k, device, batch_size=2048):
         current_v = S_XY_arr - S_X_arr
 
     return current_v, S_X_arr, S_XY_arr
+
+
+def greedy(G, D, Y, kernel, device, batch_size):
+    print("Running greedy algorithm")
+    m = G.shape[0]
+    maxheap = MaxHeap()
+    R_i = []
+    deltas = []
+    vs = []
+
+    v_init, S_X, S_XY = mmd_neg_biased_batched(D, Y, kernel, device)
+    v = v_init
+    deltas_init = v_update_batch_iter(G, D, Y, S_X, S_XY, kernel, device, batch_size)[0] - v
+
+    print("Initial delta computation")
+    for i in tqdm(range(m)):
+        x = G[i:i + 1]
+        delta = deltas_init[i]
+        maxheap.heappush((delta, x))
+
+    with trange(m) as t:
+        for i in t:
+            t.set_description('Adding points')
+            added = False
+
+            while added is False:
+                _, x = maxheap.heappop()
+                v_new, S_X_temp, S_XY_temp = v_update_batch(x, union(D, R_i), Y, S_X, S_XY, kernel)
+                delta = v_new - v
+                if len(maxheap.h) == 0 or delta >= maxheap[0][0]:
+                    R_i.append(np.squeeze(x))
+                    v += delta
+                    deltas.append(delta)
+                    vs.append(v)
+                    S_X = S_X_temp
+                    S_XY = S_XY_temp
+                    added = True
+                    t.set_postfix(point=x, delta=delta, v=v)
+                else:
+                    maxheap.heappush((delta, x))
+
+            if delta <= 0:  # Exit condition
+                break
+            if len(maxheap.h) == 0:
+                raise Exception('Max-heap is empty!')
+
+    print("Maximum v attained is {}".format(v))
+
+    return R_i, deltas, vs, v
 
 
 def weighted_sampling(candidates, D, mu_target, Y, kernel, greed, rel_tol=1e-03, device='cpu', batch_size=2048):

@@ -7,7 +7,7 @@ from data.pipeline import get_data_features
 from core.kernel import get_kernel, median_heuristic, optimize_kernel
 from core.reward_calculation import get_v, shapley, get_vN, get_v_is, get_eta_q, get_q_rho, opt_vstar, get_v_maxs, \
     get_vCi
-from core.reward_realization import reward_realization
+from core.reward_realization import reward_realization, greedy
 from core.utils import norm
 from metrics.class_imbalance import get_classes, class_proportion
 from metrics.phi_div import dkl
@@ -139,7 +139,11 @@ def main(dataset, split, mode, greed, condition, num_parties, num_classes, d, pa
     v_Cis = [get_vCi(i, phi, v) for i in range(1, num_parties + 1)]
     print("V_Cis:\n{}".format(v_Cis))
     v_maxs = get_v_maxs(party_datasets, reference_dataset, candidate_datasets[0], kernel, device, batch_size)
-    print("v_maxs:\n{}".format(v_maxs))
+    print("v_maxs (by appending everything):\n{}".format(v_maxs))
+
+    v_maxs_greedy = []
+    for i in range(num_parties):
+        v_maxs_greedy.append(greedy(candidate_datasets[i], party_datasets[i], reference_dataset, kernel, device, batch_size))
 
     if mode == 'perm_samp':
         print("Using permutation sampling to calculate reward vector")
@@ -159,7 +163,7 @@ def main(dataset, split, mode, greed, condition, num_parties, num_classes, d, pa
         print("rho: {}".format(rho))
     elif mode == 'opt_vstar':
         print("Using opt_vstar to calculate reward vector")
-        q, v_star, v_star_frac, rho = opt_vstar(alpha, v_is, v_maxs, v_Cis, cond=condition, rho_penalty=-0.001)
+        q, v_star, v_star_frac, rho = opt_vstar(alpha, v_is, v_maxs_greedy, v_Cis, cond=condition, rho_penalty=-0.001)
         print("v*: {}".format(v_star))
         print("Fraction of maximum possible v*: {}".format(v_star_frac))
         print("rho: {}".format(rho))
