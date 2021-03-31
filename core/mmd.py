@@ -38,7 +38,6 @@ def mmd_neg_biased_batched(X, Y, k, device, batch_size=128):
 
     X_tens = torch.tensor(X, device=device)
     Y_tens = torch.tensor(Y, device=device)
-    k.to(device)
 
     with torch.no_grad():
         S_XY = 0

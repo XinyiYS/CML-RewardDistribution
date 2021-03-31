@@ -53,7 +53,6 @@ def v_update_batch_iter(x, X, Y, S_X, S_XY, k, device, batch_size=2048):
     :return: MMD^2, A, B, all arrays of size (z)
     """
     with torch.no_grad():
-        k.to(device)
         x_tens = torch.tensor(x, device=device)
         X_tens = torch.tensor(X, device=device)
         Y_tens = torch.tensor(Y, device=device)
