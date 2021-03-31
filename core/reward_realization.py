@@ -1,13 +1,13 @@
 import numpy as np
 import torch
 from scipy.special import softmax
-from tqdm import tqdm, trange
+from tqdm import tqdm
 
-from core.utils import union, MaxHeap
+from core.utils import union
 from core.mmd import mmd_neg_biased_batched
 
 
-def v_update_batch(x, X_tens, Y_tens, S_X, S_XY, k, device):
+def v_update_batch(x, X, Y, S_X, S_XY, k):
     """
     Calculates v when we add a batch of points to a set with an already calculated v. Updating one point like this takes
     linear time instead of quadratic time by naively redoing the entire calculation.
@@ -19,23 +19,25 @@ def v_update_batch(x, X_tens, Y_tens, S_X, S_XY, k, device):
     :param k: GPyTorch kernel
     :return: MMD^2, A, B, all arrays of size (z)
     """
-    with torch.no_grad():
-        x_tens = torch.tensor(x, device=device)
-        m = X_tens.size()[0]
-        n = Y_tens.size()[0]
+    x_tens = torch.tensor(x)
+    X_tens = torch.tensor(X)
+    Y_tens = torch.tensor(Y)
 
-        S_X_update = ((m ** 2) / ((m + 1) ** 2)) * S_X + \
-                     (2 / ((m + 1) ** 2)) * torch.sum(k(x_tens, X_tens).evaluate(), axis=1) + \
-                     (1 / ((m + 1) ** 2)) * torch.diag(k(x_tens).evaluate())
+    m = X.shape[0]
+    n = Y.shape[0]
 
-        S_XY_update = (m / (m + 1)) * S_XY + (2 / (n * (m + 1))) * torch.sum(k(x_tens, Y_tens).evaluate(), axis=1)
+    S_X_update = ((m ** 2) / ((m + 1) ** 2)) * S_X + \
+                 (2 / ((m + 1) ** 2)) * torch.sum(k(x_tens, X_tens).evaluate(), axis=1) + \
+                 (1 / ((m + 1) ** 2)) * torch.diag(k(x_tens).evaluate())
 
-        S_X_arr = S_X_update
-        S_XY_arr = S_XY_update
+    S_XY_update = (m / (m + 1)) * S_XY + (2 / (n * (m + 1))) * torch.sum(k(x_tens, Y_tens).evaluate(), axis=1)
 
-        current_v = S_XY_arr - S_X_arr
+    S_X_arr = S_X_update.detach().numpy()
+    S_XY_arr = S_XY_update.detach().numpy()
 
-    return current_v.item(), S_X_arr, S_XY_arr
+    current_v = S_XY_arr - S_X_arr
+
+    return current_v, S_X_arr, S_XY_arr
 
 
 def v_update_batch_iter(x, X, Y, S_X, S_XY, k, device, batch_size=2048):
@@ -77,56 +79,6 @@ def v_update_batch_iter(x, X, Y, S_X, S_XY, k, device, batch_size=2048):
         current_v = S_XY_arr - S_X_arr
 
     return current_v, S_X_arr, S_XY_arr
-
-
-def greedy(G, D, Y, kernel, device, batch_size):
-    print("Running greedy algorithm")
-    m = G.shape[0]
-    maxheap = MaxHeap()
-    R_i = []
-    deltas = []
-    vs = []
-
-    v_init, S_X, S_XY = mmd_neg_biased_batched(D, Y, kernel, device)
-    v = v_init
-    deltas_init = v_update_batch_iter(G, D, Y, S_X, S_XY, kernel, device, batch_size)[0] - v
-
-    print("Initial delta computation")
-    for i in tqdm(range(m)):
-        x = G[i:i + 1]
-        delta = deltas_init[i]
-        maxheap.heappush((delta, x))
-
-    with torch.no_grad():
-        Y_tens = torch.tensor(Y, device=device)
-        for i in range(m):
-            added = False
-            D_R_i = torch.tensor(union(D, R_i), device=device)
-            while added is False:
-                _, x = maxheap.heappop()
-                v_new, S_X_temp, S_XY_temp = v_update_batch(x, D_R_i, Y_tens, S_X, S_XY, kernel, device)
-                delta = v_new - v
-                if len(maxheap.h) == 0 or delta >= maxheap[0][0]:
-                    print("Added a point")
-                    R_i.append(np.squeeze(x))
-                    v += delta
-                    deltas.append(delta)
-                    vs.append(v)
-                    S_X = S_X_temp
-                    S_XY = S_XY_temp
-                    added = True
-                else:
-                    print("Pushing on to heap")
-                    maxheap.heappush((delta, x))
-
-            if delta <= 0:  # Exit condition
-                break
-            if len(maxheap.h) == 0:
-                raise Exception('Max-heap is empty!')
-
-    print("Maximum v attained is {}".format(v))
-
-    return R_i, deltas, vs, v
 
 
 def weighted_sampling(candidates, D, mu_target, Y, kernel, greed, rel_tol=1e-03, device='cpu', batch_size=2048):
