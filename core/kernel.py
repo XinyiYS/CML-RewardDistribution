@@ -183,7 +183,7 @@ def optimize_kernel_binsearch_only(k, device, party_datasets, reference_dataset,
     return k
 
 
-def binary_search_ls(lengthscales, device, party_datasets, reference_dataset, high=1000, low=1, num_iters=20, batch_size=128):
+def binary_search_ls(lengthscales, device, party_datasets, reference_dataset, high=100, low=1, num_iters=10, batch_size=128):
     """
     Searches for minimum factor to multiply lengthscales by in order to be valid
     :param lengthscale: d length numpy array of lengthscales
@@ -211,7 +211,7 @@ def binary_search_ls(lengthscales, device, party_datasets, reference_dataset, hi
     return lengthscales * high
 
 
-def optimize_kernel(k, device, party_datasets, reference_dataset, num_epochs=30, batch_size=128):
+def optimize_kernel(k, device, party_datasets, reference_dataset, num_epochs=30, batch_size=128, patience=3):
     """
 
     :param k:
@@ -231,7 +231,6 @@ def optimize_kernel(k, device, party_datasets, reference_dataset, num_epochs=30,
     party_datasets_test = torch.tensor(party_datasets[:, train_test_split_idx:], device=device, dtype=torch.float32)
 
     optimizer = torch.optim.Adam(k.parameters(), lr=0.1)
-    patience = 8
     averages = []
     best_idx = 0
 
@@ -286,6 +285,8 @@ def optimize_kernel(k, device, party_datasets, reference_dataset, num_epochs=30,
             k.lengthscale = valid_lengthscales
         else:
             print("All lower bounds still positive")
+
+    return k
 
 
 # def optimize_kernel(k, device, party_datasets, reference_dataset, num_epochs=50,
