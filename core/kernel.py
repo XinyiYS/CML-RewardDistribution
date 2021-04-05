@@ -196,7 +196,7 @@ def binary_search_ls(lengthscales, device, party_datasets, reference_dataset, hi
     k = gpytorch.kernels.RBFKernel(ard_num_dims=d)
     k.to(device)
 
-    k.lengthscale = lengthscales * 1000
+    k.lengthscale = lengthscales * high
     if not is_all_lb_positive(k, party_datasets, reference_dataset, device, batch_size):
         raise Exception("High value of lengthscale is already invalid")
 
@@ -208,7 +208,8 @@ def binary_search_ls(lengthscales, device, party_datasets, reference_dataset, hi
         else:
             low = mid
 
-    return lengthscales
+    return lengthscales * high
+
 
 def optimize_kernel(k, device, party_datasets, reference_dataset, num_epochs=30, batch_size=128):
     """
@@ -281,6 +282,7 @@ def optimize_kernel(k, device, party_datasets, reference_dataset, num_epochs=30,
             # "Project" lengthscale back to valid range
             print("Projecting lengthscales back to valid range")
             valid_lengthscales = binary_search_ls(k.lengthscale.cpu().detach().numpy(), device, party_datasets, reference_dataset)
+            print("Found valid lengthscales: {}".format(valid_lengthscales))
             k.lengthscale = valid_lengthscales
         else:
             print("All lower bounds still positive")
