@@ -76,8 +76,8 @@ def cifar():
 
 @ex.automain
 def main(dataset, split, mode, greed, condition, num_parties, num_classes, d, party_data_size,
-         candidate_data_size, perm_samp_high, perm_samp_low, perm_samp_iters, kernel, gamma, gpu,
-         batch_size, optimize_kernel_params, num_pareto_val_points):
+         candidate_data_size, perm_samp_high, perm_samp_low, perm_samp_iters, kernel, gpu,
+         batch_size, optimize_kernel_params):
     args = dict(sorted(locals().items()))
     print("Running with parameters {}".format(args))
     run_id = ex.current_run._id
