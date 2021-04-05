@@ -4,7 +4,7 @@ from sacred import Experiment
 from sacred.observers import FileStorageObserver
 
 from data.pipeline import get_data_features
-from core.kernel import get_kernel, optimize_kernel
+from core.kernel import get_kernel, optimize_kernel, optimize_kernel_binsearch_only
 from core.reward_calculation import get_v, shapley, get_vN, get_v_is, get_eta_q, get_q_rho, opt_vstar, get_v_maxs, \
     get_vCi
 from core.reward_realization import reward_realization
@@ -29,7 +29,7 @@ def gmm():
     num_classes = 5
     d = 2  # Only for GMM
     party_data_size = 1000
-    candidate_data_size = 50000
+    candidate_data_size = 100000
     perm_samp_high = 0.4
     perm_samp_low = 0.001
     perm_samp_iters = 8
@@ -105,7 +105,7 @@ def main(dataset, split, mode, greed, condition, num_parties, num_classes, d, pa
     kernel = get_kernel(kernel, d, 1., device)
     if optimize_kernel_params:
         print("Optimizing kernel parameters")
-        kernel = optimize_kernel(kernel, device, party_datasets, reference_dataset)
+        kernel = optimize_kernel_binsearch_only(kernel, device, party_datasets, reference_dataset)
 
     print("Kernel lengthscale: {}".format(kernel.lengthscale))
     # Reward calculation
