@@ -150,7 +150,7 @@ def is_all_lb_positive(k, party_datasets, reference_dataset, device, batch_size)
     return np.all(np.array(v_is) >= 0)
 
 
-def optimize_kernel_binsearch_only(k, device, party_datasets, reference_dataset, low=0.1, high=1000, num_iters=20, batch_size=256):
+def optimize_kernel_binsearch_only(k, device, party_datasets, reference_dataset, low=0.01, high=1000, num_iters=20, batch_size=256):
     """
     Does a binary search over lengthscales for minimum value that gives non-negative party dataset values
     :param k:
