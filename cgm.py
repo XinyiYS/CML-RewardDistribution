@@ -4,7 +4,7 @@ from sacred import Experiment
 from sacred.observers import FileStorageObserver
 
 from data.pipeline import get_data_features
-from core.kernel import get_kernel, median_heuristic, optimize_kernel
+from core.kernel import get_kernel, optimize_kernel
 from core.reward_calculation import get_v, shapley, get_vN, get_v_is, get_eta_q, get_q_rho, opt_vstar, get_v_maxs, \
     get_vCi
 from core.reward_realization import reward_realization
@@ -49,7 +49,7 @@ def mnist():
     num_parties = 5
     num_classes = 10
     d = 8
-    party_data_size = 10000
+    party_data_size = 5000
     candidate_data_size = 100000
     perm_samp_high = 0.4
     perm_samp_low = 0.001
@@ -70,7 +70,7 @@ def cifar():
     num_parties = 5
     num_classes = 10
     d = 8
-    party_data_size = 10000
+    party_data_size = 5000
     candidate_data_size = 100000
     perm_samp_high = 0.4
     perm_samp_low = 0.001
@@ -107,6 +107,7 @@ def main(dataset, split, mode, greed, condition, num_parties, num_classes, d, pa
         print("Optimizing kernel parameters")
         kernel = optimize_kernel(kernel, device, party_datasets, reference_dataset)
 
+    print("Kernel lengthscale: {}".format(kernel.lengthscale))
     # Reward calculation
     v = get_v(party_datasets, reference_dataset, kernel, device=device, batch_size=batch_size)
     print("Coalition values:\n{}".format(v))
