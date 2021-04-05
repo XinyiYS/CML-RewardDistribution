@@ -30,6 +30,7 @@ def gmm():
     gpu = True
     batch_size = 2048
     optimize_kernel_params = True
+    patience = 8
 
 
 @ex.named_config
@@ -51,6 +52,7 @@ def mnist():
     gpu = True
     batch_size = 256
     optimize_kernel_params = True
+    patience = 8
 
 
 @ex.named_config
@@ -72,12 +74,13 @@ def cifar():
     gpu = True
     batch_size = 256
     optimize_kernel_params = True
+    patience=8
 
 
 @ex.automain
 def main(dataset, split, mode, greed, condition, num_parties, num_classes, d, party_data_size,
          candidate_data_size, perm_samp_high, perm_samp_low, perm_samp_iters, kernel, gpu,
-         batch_size, optimize_kernel_params):
+         batch_size, optimize_kernel_params, patience):
     args = dict(sorted(locals().items()))
     print("Running with parameters {}".format(args))
     run_id = ex.current_run._id
@@ -96,7 +99,7 @@ def main(dataset, split, mode, greed, condition, num_parties, num_classes, d, pa
                                                                                                               split)
 
     kernel = get_kernel(kernel, d, 1., device)
-    kernel = optimize_kernel(kernel, device, party_datasets, reference_dataset)
+    kernel = optimize_kernel(kernel, device, party_datasets, reference_dataset, patience=patience)
 
     print("Kernel lengthscale: {}".format(kernel.lengthscale))
     # Reward calculation

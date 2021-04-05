@@ -211,7 +211,7 @@ def binary_search_ls(lengthscales, device, party_datasets, reference_dataset, hi
     return lengthscales * high
 
 
-def optimize_kernel(k, device, party_datasets, reference_dataset, num_epochs=30, batch_size=128, patience=3):
+def optimize_kernel(k, device, party_datasets, reference_dataset, num_epochs=30, batch_size=128, patience=8):
     """
 
     :param k:
