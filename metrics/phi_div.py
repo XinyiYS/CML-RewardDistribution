@@ -36,14 +36,14 @@ def dkl(P, Q, k=2):
     return kl
 
 
-def average_dkl(party_datasets, rewards, reference_dataset, min_k=2, max_k=6):
+def average_dkl(party_datasets, reference_dataset, min_k=2, max_k=6):
     num_k = max_k - min_k + 1
     num_parties = len(party_datasets)
     dkl_sum = np.zeros(num_parties)
 
     for k in range(min_k, max_k + 1):
         # print("k: {}".format(k))
-        dkl_after = np.array([dkl(np.concatenate([party_datasets[i], np.array(rewards[i])], axis=0),
+        dkl_after = np.array([dkl(party_datasets[i],
                                   reference_dataset,
                                   k=k) for i in range(num_parties)])
         print("DKL for k = {}: {}".format(k, dkl_after))
