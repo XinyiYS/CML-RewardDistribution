@@ -23,11 +23,10 @@ def dkl(P, Q, k=2):
 
     kl = 0
     for i in range(n):
-        P_idx = indices[i, k]
         P_distance = P_distances[i, k]
 
         partition = np.argpartition(PQ_distances[i], k)
-        idx = partition[k-1]
+        idx = partition[k]
         PQ_distance = PQ_distances[i, idx]
         kl += np.log(PQ_distance) - np.log(P_distance)
 
@@ -35,3 +34,21 @@ def dkl(P, Q, k=2):
     kl += np.log(m) - np.log(n-1)
 
     return kl
+
+
+def average_dkl(party_datasets, rewards, reference_dataset, min_k=2, max_k=6):
+    num_k = max_k - min_k + 1
+    num_parties = len(party_datasets)
+    dkl_sum = np.zeros(num_parties)
+
+    for k in range(min_k, max_k + 1):
+        # print("k: {}".format(k))
+        dkl_after = np.array([dkl(np.concatenate([party_datasets[i], np.array(rewards[i])], axis=0),
+                                  reference_dataset,
+                                  k=k) for i in range(num_parties)])
+        print("DKL for k = {}: {}".format(k, dkl_after))
+        dkl_sum += dkl_after
+
+    avg_dkl = dkl_sum / num_k
+
+    return avg_dkl
