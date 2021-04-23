@@ -59,7 +59,7 @@ def main(ds, split, greed):
     print(dkls_before)
 
     print("Calculating average DKLs after")
-    dkls_after = average_dkl(np.concatenate(party_datasets_with_rewards), reference_dataset)
+    dkls_after = average_dkl(party_datasets_with_rewards, reference_dataset)
     print(dkls_after)
     print("Correlation coefficient with alpha: \n{}".format(np.corrcoef(alpha, dkls_after)[0, 1]))
 
