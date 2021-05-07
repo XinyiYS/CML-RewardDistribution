@@ -4,7 +4,7 @@ from core.utils import split_proportions, split_data_into_classes
 
 
 def get_proportions(split, dataset):
-    if dataset == 'gmm' or dataset == 'cifar5':  # WARNING: implicitly assumes 5 parties and 5 classes
+    if dataset == 'gmm':  # WARNING: implicitly assumes 5 parties and 5 classes
         if split == 'equaldisjoint':
             return np.array([[0.96, 0.01, 0.01, 0.01, 0.01],
                              [0.01, 0.96, 0.01, 0.01, 0.01],
@@ -30,6 +30,15 @@ def get_proportions(split, dataset):
                              [0.290, 0.290, 0.195, 0.195, 0.005, 0.005, 0.005, 0.005, 0.005, 0.005],
                              [0.005, 0.005, 0.100, 0.100, 0.290, 0.290, 0.100, 0.100, 0.005, 0.005],
                              [0.005, 0.005, 0.005, 0.005, 0.005, 0.005, 0.195, 0.195, 0.290, 0.290]])
+    elif dataset == 'diabetes': # WARNING: implicitly assumes 3 parties
+        if split == 'equaldisjoint':
+            return np.array([[0.96, 0.02, 0.02],
+                            [0.02, 0.96, 0.02],
+                            [0.02, 0.02, 0.96]])
+        if split == 'unequal':
+            return np.array([[0.333, 0.333, 0.334],
+                            [0.333, 0.647, 0.02],
+                            [0.334, 0.02, 0.646]])
 
 
 def get_data_features(dataset, num_classes, d, num_parties, party_data_size, candidate_data_size, split):
@@ -53,7 +62,7 @@ def get_data_features(dataset, num_classes, d, num_parties, party_data_size, can
         gmm_points, candidate_labels = sample_GMM(means, covs, candidate_data_size)
         candidate_datasets = np.array([gmm_points] * num_parties)
 
-    elif dataset == 'mnist' or dataset == 'cifar' or dataset=='cifar5':
+    elif dataset == 'mnist' or dataset == 'cifar' or dataset=='diabetes':
         np.random.seed(0)
         party_datasets = np.load("data/{}/{}-party_features.npy".format(dataset, split))
         party_labels = np.load("data/{}/{}-party_labels.npy".format(dataset, split))
