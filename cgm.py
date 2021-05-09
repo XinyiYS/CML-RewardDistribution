@@ -64,11 +64,31 @@ def mnist():
 def cifar():
     dataset = "cifar"
     split = "equaldisjoint"  # "equaldisjoint" or "unequal"
-    mode = "opt_vstar"  # "perm_samp" or "rho_shapley"
+    mode = "opt_vstar"
     greed = 2
     condition = "stable"
     num_parties = 5
     num_classes = 10
+    d = 8
+    party_data_size = 5000
+    candidate_data_size = 100000
+    perm_samp_high = 0.4
+    perm_samp_low = 0.001
+    perm_samp_iters = 8
+    kernel = 'se'
+    gpu = True
+    batch_size = 256
+    optimize_kernel_params = True
+    
+@ex.named_config
+def diabetes():
+    dataset = "diabetes"
+    split = "equaldisjoint"  # "equaldisjoint" or "unequal"
+    mode = "opt_vstar"
+    greed = 2
+    condition = "stable"
+    num_parties = 3
+    num_classes = 3
     d = 8
     party_data_size = 5000
     candidate_data_size = 100000
@@ -102,6 +122,8 @@ def main(dataset, split, mode, greed, condition, num_parties, num_classes, d, pa
                                                                                             candidate_data_size,
                                                                                             split)
 
+    print(party_datasets.shape)
+    print(candidate_datasets[0].shape)
     kernel = get_kernel(kernel, d, 1., device)
     if optimize_kernel_params:
         print("Optimizing kernel parameters")
