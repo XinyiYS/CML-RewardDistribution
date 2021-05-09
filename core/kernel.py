@@ -5,7 +5,6 @@ from tqdm import tqdm
 from core.mmd import mmd_neg_unbiased, mmd_neg_unbiased_batched
 from core.reward_calculation import get_v, get_v_is, get_vCi
 from scipy.optimize import linprog
-import cvxpy as cp
 
 
 class SEKernel:
