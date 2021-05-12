@@ -17,10 +17,15 @@ def main(ds, split, greed):
     print("Running with parameters {}".format(args))
     run_id = ex.current_run._id
 
-    num_parties = 5
+    if ds == 'diabetes':
+        num_parties = 3
+    else:
+        num_parties = 5
 
     if ds == 'gmm':
         num_classes = 5
+    elif ds == 'diabetes':
+        num_classes = 3
     else:
         num_classes = 10
 
