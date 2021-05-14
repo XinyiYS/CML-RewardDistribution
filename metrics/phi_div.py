@@ -20,7 +20,7 @@ def dkl(P, Q, k=2):
     P_distances, indices = P_nbrs.kneighbors(P)
 
     PQ_distances = distance.cdist(P, Q, metric='euclidean')
-    min_PQ_dist = np.min(PQ_distances)
+    min_PQ_dist = np.min(PQ_distances[np.nonzero(PQ_distances)])
 
     kl = 0
     for i in range(n):
