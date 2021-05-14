@@ -6,7 +6,7 @@ from scipy.spatial import distance
 def dkl(P, Q, k=2):
     """
     Calculates an estimate of the Kullback-Leibler divergence between P and Q based on finite samples from P and Q
-    using k-nearest neighbours (Perez-Cruz, 2008). WARNING: hard coded for k < 8
+    using k-nearest neighbours (Perez-Cruz, 2008)
     :param P: array of size (n, d)
     :param Q: array of size(m, d)
     :param k: int, kth-nearest neighbour
@@ -16,7 +16,7 @@ def dkl(P, Q, k=2):
     (n, d) = P.shape
     m = Q.shape[0]
 
-    P_nbrs = NearestNeighbors(n_neighbors=8, algorithm='ball_tree').fit(P) ## WARNING: Hard-coded for k < 8
+    P_nbrs = NearestNeighbors(n_neighbors=k+1, algorithm='ball_tree').fit(P)
     P_distances, indices = P_nbrs.kneighbors(P)
 
     PQ_distances = distance.cdist(P, Q, metric='euclidean')
@@ -24,25 +24,18 @@ def dkl(P, Q, k=2):
     kl = 0
     for i in range(n):
         P_distance = P_distances[i, k]
-        new_k = k
-        while P_distance == 0:
-            new_k += 1
-            P_distance = P_distances[i, new_k]
 
-        PQ_distance = 0
-        new_k = k
-        while PQ_distance == 0:
-            partition = np.argpartition(PQ_distances[i], new_k)
-            idx = partition[new_k]
-            PQ_distance = PQ_distances[i, idx]
-            new_k += 1
-            if new_k > 8:
-                raise Exception("num_k > 8")
+        if P_distance == 0:  # If P distance is 0, PQ distance will also be 0 so just skip
+            continue
+
+        partition = np.argpartition(PQ_distances[i], k)
+        idx = partition[k]
+        PQ_distance = PQ_distances[i, idx]
         kl += np.log(PQ_distance) - np.log(P_distance)
 
     kl *= (d/n)
     kl += np.log(m) - np.log(n-1)
-    print('kl: {}'.format(kl))
+
     return kl
 
 
