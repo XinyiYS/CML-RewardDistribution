@@ -45,6 +45,15 @@ def main(ds, split, greed):
 
     print("alpha:\n{}".format(alpha))
 
+    print("Calculating average DKLs before")
+    dkls_before = average_dkl(party_datasets, reference_dataset)
+    print(dkls_before)
+
+    print("Calculating average DKLs after")
+    dkls_after = average_dkl(party_datasets_with_rewards, reference_dataset)
+    print(dkls_after)
+    print("Correlation coefficient with alpha: \n{}".format(np.corrcoef(alpha, dkls_after)[0, 1]))
+
     class_props = []
     for result in rewards:
         class_props.append(
@@ -58,15 +67,6 @@ def main(ds, split, greed):
     print("Wasserstein-2 before: \n{}".format(wass_before))
     print("Wasserstein-2 after: \n{}".format(wass_after))
     print("Correlation coefficient with alpha: \n{}".format(np.corrcoef(alpha, wass_after)[0, 1]))
-
-    print("Calculating average DKLs before")
-    dkls_before = average_dkl(party_datasets, reference_dataset)
-    print(dkls_before)
-
-    print("Calculating average DKLs after")
-    dkls_after = average_dkl(party_datasets_with_rewards, reference_dataset)
-    print(dkls_after)
-    print("Correlation coefficient with alpha: \n{}".format(np.corrcoef(alpha, dkls_after)[0, 1]))
 
     #Save
     pickle.dump((class_props, wass_before, wass_after, dkls_before, dkls_after),
