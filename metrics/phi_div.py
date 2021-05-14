@@ -20,6 +20,7 @@ def dkl(P, Q, k=2):
     P_distances, indices = P_nbrs.kneighbors(P)
 
     PQ_distances = distance.cdist(P, Q, metric='euclidean')
+    min_PQ_dist = np.min(PQ_distances)
 
     kl = 0
     for i in range(n):
@@ -31,6 +32,10 @@ def dkl(P, Q, k=2):
         partition = np.argpartition(PQ_distances[i], k)
         idx = partition[k]
         PQ_distance = PQ_distances[i, idx]
+
+        if PQ_distance == 0:  # If PQ distance is 0, replace with smallest distance observed for numerical reasons
+            PQ_distance = min_PQ_dist
+
         kl += np.log(PQ_distance) - np.log(P_distance)
 
     kl *= (d/n)
