@@ -1,6 +1,7 @@
 import numpy as np
 from sklearn.neighbors import NearestNeighbors
 from scipy.spatial import distance
+from tqdm import tqdm
 
 
 def dkl(P, Q, k=2):
@@ -12,35 +13,66 @@ def dkl(P, Q, k=2):
     :param k: int, kth-nearest neighbour
     :return: KL(P||Q) estimate
     """
-
+    print("Calculating DKL for k={}".format(k))
     (n, d) = P.shape
     m = Q.shape[0]
+    
+    #print("Calculating PQ_distances")
+    PQ_distances = np.zeros(n)
+    min_PQ_dist = np.inf
 
+    print("Calculating P_distances using NN")
     P_nbrs = NearestNeighbors(n_neighbors=k+1, algorithm='ball_tree').fit(P)
     P_distances, indices = P_nbrs.kneighbors(P)
 
-    PQ_distances = distance.cdist(P, Q, metric='euclidean')
-    min_PQ_dist = np.min(PQ_distances[np.nonzero(PQ_distances)])
-
     kl = 0
+    print("Calculating PQ_distances")
+    for i in tqdm(range(n)):
+        dist_arr = np.linalg.norm(Q - P[i], axis=1)
+        
+        partition = np.argpartition(dist_arr, k)
+        idx = partition[k]
+        PQ_distances[i] = dist_arr[idx]
+        
+        curr_min = np.min(dist_arr[np.nonzero(dist_arr)])
+        if curr_min < min_PQ_dist:
+            min_PQ_dist = curr_min
+
+    log_P_dist_sum = 0
+    log_PQ_dist_sum = 0
+    num_skips = 0
+    num_replacements = 0
+    
+    print("Updating KL divergence")
     for i in range(n):
         P_distance = P_distances[i, k]
 
         if P_distance == 0:  # If P distance is 0, PQ distance will also be 0 so just skip
+            num_skips += 1
             continue
-
-        partition = np.argpartition(PQ_distances[i], k)
-        idx = partition[k]
-        PQ_distance = PQ_distances[i, idx]
-
+        
+        PQ_distance = PQ_distances[i]
         if PQ_distance == 0:  # If PQ distance is 0, replace with smallest distance observed for numerical reasons
+            num_replacements += 1
             PQ_distance = min_PQ_dist
-
-        kl += np.log(PQ_distance) - np.log(P_distance)
-
-    kl *= (d/n)
-    kl += np.log(m) - np.log(n-1)
-
+    
+        #kl += np.log(PQ_distance) - np.log(P_distance)
+        log_PQ_dist_sum += np.log(PQ_distance)
+        log_P_dist_sum += np.log(P_distance)
+    
+    print("num_skips: {}".format(num_skips))
+    print("num_replacements: {}".format(num_replacements))
+    print("log_P_dist_sum: {}".format(log_P_dist_sum))
+    print("log_PQ_dist_sum: {}".format(log_PQ_dist_sum))
+    kl += log_PQ_dist_sum - log_P_dist_sum
+    print("KL before factor and adding logs: {}".format(kl))
+    factor = d/n
+    print("factor: {}".format(factor))
+    kl *= factor
+    const = np.log(m) - np.log(n-1)
+    print(const)
+    kl += const
+    print("final KL: {}".format(kl))
     return kl
 
 
