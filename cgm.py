@@ -103,10 +103,10 @@ def main(dataset, split, greed, condition, num_parties, num_classes, d, party_da
                                                                                             candidate_data_size,
                                                                                             split)
 
-    kernel, lengthscale = get_kernel(kernel, d, 1., device)
+    kernel = get_kernel(kernel, d, 1., device)
     if optimize_kernel_params:
         print("Optimizing kernel parameters")
-        kernel = optimize_kernel_binsearch_only(kernel, device, party_datasets, reference_dataset)
+        kernel, lengthscale = optimize_kernel_binsearch_only(kernel, device, party_datasets, reference_dataset)
 
     print("Kernel lengthscale: {}".format(kernel.lengthscale))
     # Reward calculation
