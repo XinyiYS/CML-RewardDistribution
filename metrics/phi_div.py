@@ -1,6 +1,5 @@
 import numpy as np
 from sklearn.neighbors import NearestNeighbors
-from scipy.spatial import distance
 from tqdm import tqdm
 
 
@@ -17,7 +16,6 @@ def dkl(P, Q, k=2):
     (n, d) = P.shape
     m = Q.shape[0]
     
-    #print("Calculating PQ_distances")
     PQ_distances = np.zeros(n)
     min_PQ_dist = np.inf
 
@@ -56,7 +54,6 @@ def dkl(P, Q, k=2):
             num_replacements += 1
             PQ_distance = min_PQ_dist
     
-        #kl += np.log(PQ_distance) - np.log(P_distance)
         log_PQ_dist_sum += np.log(PQ_distance)
         log_P_dist_sum += np.log(P_distance)
     
@@ -82,7 +79,6 @@ def average_dkl(party_datasets, reference_dataset, min_k=2, max_k=6):
     dkl_sum = np.zeros(num_parties)
 
     for k in range(min_k, max_k + 1):
-        # print("k: {}".format(k))
         dkl_after = np.array([dkl(party_datasets[i],
                                   reference_dataset,
                                   k=k) for i in range(num_parties)])
