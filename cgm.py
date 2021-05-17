@@ -103,7 +103,7 @@ def main(dataset, split, greed, condition, num_parties, num_classes, d, party_da
                                                                                             candidate_data_size,
                                                                                             split)
 
-    kernel = get_kernel(kernel, d, 1., device)
+    kernel, lengthscale = get_kernel(kernel, d, 1., device)
     if optimize_kernel_params:
         print("Optimizing kernel parameters")
         kernel = optimize_kernel_binsearch_only(kernel, device, party_datasets, reference_dataset)
@@ -160,7 +160,7 @@ def main(dataset, split, greed, condition, num_parties, num_classes, d, party_da
                     num_parties,
                     num_classes,
                     alpha,
-                    kernel.lengthscale,
+                    lengthscale,
                     party_datasets,
                     party_labels,
                     reference_dataset,

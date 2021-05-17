@@ -179,7 +179,7 @@ def optimize_kernel_binsearch_only(k, device, party_datasets, reference_dataset,
     k.lengthscale = [high for _ in range(d)]
     print("Optimal lengthscale: {}".format(high))
 
-    return k
+    return k, high
 
 
 def binary_search_ls(lengthscales, device, party_datasets, reference_dataset, high=100, low=1, num_iters=10, batch_size=128):
