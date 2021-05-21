@@ -82,9 +82,7 @@ def main(ds, num_classes, d, party_data_size):
             for party in range(num_parties):
                 mus = dic['mus'][party]
                 max_mu_idx = np.argmax(mus)
-                if max_mu_idx == len(mus) - 1:
-                    print("No early stopping for {}-{}-{} party {}".format(ds, split, greed, party + 1))
-                else:
+                if max_mu_idx != len(mus) - 1:
                     print('{}-{}-{} party {}: max at {}, total length is {}'.format(ds, split, greed, party + 1,
                                                                                     max_mu_idx, len(mus)))
 
@@ -166,7 +164,7 @@ def main(ds, num_classes, d, party_data_size):
         for greed in greeds:
             alpha = results_dict[split][greed]['alpha']
             wass = results_dict[split][greed]['wass_after']
-            dkl = results_dict[split][greed]['dkls_after']
+            dkl = results_dict[split][greed]['dkl_after']
             num_rewards = results_dict[split][greed]['num_rewards']
             mmd_u = results_dict[split][greed]['mmd_unbiased_after']
             imba = results_dict[split][greed]['imba_after']
