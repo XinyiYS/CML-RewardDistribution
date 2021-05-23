@@ -3,8 +3,7 @@ import torch
 import gpytorch
 from tqdm import tqdm
 from core.mmd import mmd_neg_unbiased, mmd_neg_unbiased_batched
-from core.reward_calculation import get_v, get_v_is, get_vCi
-from scipy.optimize import linprog
+from core.reward_calculation import get_v, get_v_is
 
 
 class SEKernel:
@@ -134,9 +133,6 @@ def get_kernel(kernel_name, d, lengthscale, device):
         rq10.alpha = 10.
         kernel = rq01 + rq1
         kernel.kernels.append(rq10)
-        # for k in kernel.kernels:
-        #     k.raw_alpha.requires_grad = False
-        #     k.raw_lengthscale.requires_grad = False
     else:
         raise Exception("Kernel name must be 'se' or 'se_sum' or 'rq'")
 
@@ -286,139 +282,3 @@ def optimize_kernel(k, device, party_datasets, reference_dataset, num_epochs=30,
             print("All lower bounds still positive")
 
     return k
-
-
-# def optimize_kernel(k, device, party_datasets, reference_dataset, num_epochs=50,
-#                     batch_size=128, num_val_points=2000):
-#     # Data setup
-#     n = len(reference_dataset)
-#     S = np.min([len(ds) for ds in party_datasets])
-#     d = reference_dataset.shape[-1]
-#     train_test_split_idx = int(0.6 * S)
-#     party_ds_size = train_test_split_idx
-#     num_parties = len(party_datasets)
-#
-#     party_datasets_tens = torch.tensor(party_datasets[:, :train_test_split_idx], device=device, dtype=torch.float32)
-#     reference_dataset_tens = torch.tensor(reference_dataset, device=device, dtype=torch.float32)
-#     party_datasets_test = torch.tensor(party_datasets[:, train_test_split_idx:], device=device, dtype=torch.float32)
-#
-#     # Get lower bound required for non-negativity of v(S)
-#     lb = nonneg_lb(n, S, 1)
-#
-#     # Select num_val_points random points to check k(x_i, x_j) > lb
-#     val_points = torch.tensor(reference_dataset[np.random.permutation(np.arange(num_val_points))], device=device,
-#                               dtype=torch.float32)
-#     val_points_np = val_points.cpu().numpy()
-#
-#     # Get Pareto frontier of squared differences
-#     squared_diffs = np.square(np.expand_dims(val_points_np, 1) - val_points_np)  # (m, m, d)
-#     squared_diffs = np.reshape(squared_diffs, [-1, d])
-#     squared_diff_idxs = \
-#     np.where((np.triu(np.ones((num_val_points, num_val_points))) - np.diag(np.ones(num_val_points))).flatten())[0]
-#     squared_diffs_reduced = squared_diffs[squared_diff_idxs]
-#     print("Calculating Pareto optimal differences")
-#     reduced_D = squared_diffs_reduced[is_pareto_efficient(-squared_diffs_reduced)]
-#
-#     # Upper bound for linear program in Frank-Wolfe algorithm
-#     b = (-2 * np.log(lb)) * np.ones(len(reduced_D), dtype=np.float32)
-#
-#     # Ensure we start within feasible set
-#     # Do a binary search for a good value of inv_ls_squared, low but above upper bound
-#     num_iters = 20
-#     low = 0.01
-#     high = 1000
-#
-#     # Check bounds
-#     k.set_inv_ls_squared_scalar(low)
-#     if not is_all_above_lb(k, val_points, lb):
-#         raise Exception("Low value of inv_ls_squared is already invalid")
-#
-#     k.set_inv_ls_squared_scalar(high)
-#     if is_all_above_lb(k, val_points, lb):
-#         raise Exception("High value of inv_ls_squared is still valid, can be pushed higher")
-#
-#     for i in range(num_iters):
-#         mid = (high + low) / 2
-#         k.set_inv_ls_squared_scalar(mid)
-#         if is_all_above_lb(k, val_points, lb):
-#             low = mid
-#         else:
-#             high = mid
-#
-#     k.set_inv_ls_squared_scalar(low)
-#     print("Optimal inverse lengthscale squared: {}".format(low))
-#
-#
-#     # Frank-Wolfe conditional gradient algorithm
-#     optimizer = torch.optim.SGD(k.parameters(), lr=0.1)
-#     t = 0
-#     patience = 20
-#     averages = []
-#     best_idx = 0
-#
-#     for epoch in range(num_epochs):
-#         print("Epoch {}".format(epoch))
-#         print("========= Test -MMD unbiased ===========")
-#         stats = []
-#         for i in range(num_parties):
-#             stat = mmd_neg_unbiased_batched(party_datasets_test[i], reference_dataset_tens, k).cpu().detach().numpy()
-#             print("Party {}: {}".format(i + 1, stat))
-#             stats.append(stat)
-#         avg = np.mean(stats)
-#         print("Average: {}".format(avg))
-#
-#         print("========= Kernel parameters ===========")
-#         print("inv lengthscale squared:")
-#         print(k.inv_ls_squared)
-#         print("lengthscale:")
-#         print(np.sqrt(1 / k.inv_ls_squared.cpu().detach().numpy()))
-#         print("k still valid (all above upper bound): {}".format(is_all_above_lb(k, val_points, lb)))
-#
-#         for i in range(party_ds_size // batch_size):
-#             # Zero gradients from previous iteration
-#             optimizer.zero_grad()
-#             loss = 0
-#
-#             idx = (i + 1)
-#             next_m = np.min([idx * batch_size, party_ds_size])
-#             m = i * batch_size
-#
-#             ref_idx = np.random.randint(0, len(reference_dataset) - batch_size)
-#             next_ref_idx = ref_idx + batch_size
-#
-#             for party in range(num_parties):
-#                 loss += mmd_neg_unbiased(party_datasets_tens[party][m:next_m],
-#                                                 reference_dataset_tens[ref_idx:next_ref_idx],
-#                                                 k)
-#
-#             # Calc loss and backprop gradients
-#             loss.backward()
-#
-#             # change gradients to argmin x \in C <grad, x>
-#             grad = k.inv_ls_squared.grad.cpu().numpy()
-#             #print("Actual grad: {}".format(grad))
-#             x = cp.Variable(d)
-#             prob = cp.Problem(cp.Minimize(grad.T @ x),
-#                               [reduced_D @ x <= b,
-#                                x >= 0])
-#             prob.solve()
-#             # res = linprog(grad, A_ub=reduced_D, b_ub=b, method='interior-point')
-#             y_t = x.value
-#             #print("y_t: {}".format(y_t))
-#             #print("inv_ls_squared: {}".format(k.inv_ls_squared))
-#
-#             # original conditional gradient update method
-#             step_size = 2 / (t + 2)
-#             #print("Step size: {}".format(step_size))
-#             k.set_inv_ls_squared((1 - step_size) * k.inv_ls_squared.cpu().detach().numpy() + step_size * y_t)
-#             t += 1
-#
-#         # Code for early termination if no improvement after patience number of epochs
-#         averages.append(avg)
-#         if avg <= averages[best_idx]:
-#             best_idx = epoch  # Low is better for this
-#         elif avg >= averages[best_idx] and epoch - best_idx >= patience:
-#             print("No improvement for {} epochs, terminating early".format(patience))
-#             break
-#
-#     return k

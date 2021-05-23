@@ -1,5 +1,4 @@
 import numpy as np
-import torch
 
 
 def union(D, R):
