@@ -105,13 +105,13 @@ def main(ds, num_classes, d, party_data_size):
                                                                dtype=torch.float32)
                 mmd_unbiased_before[i] = -mmd_neg_unbiased_batched(party_dataset_tens,
                                                                    reference_dataset_tens,
-                                                                   k)
+                                                                   k).item()
                 mmd_unbiased_after[i] = -mmd_neg_unbiased_batched(party_dataset_with_rewards_tens,
                                                                   reference_dataset_tens,
-                                                                  k)
+                                                                  k).item()
             results_dict[split][greed]['mmd_unbiased_before'] = mmd_unbiased_before
             results_dict[split][greed]['mmd_unbiased_after'] = mmd_unbiased_after
-
+    
     # Class imbalance
     print("Calculating class imbalance")
     for split in splits:  # Reduce all party_labels to party_data_size in case its larger
@@ -181,17 +181,17 @@ def main(ds, num_classes, d, party_data_size):
         results_dict[split]['all_mmd_u'] = all_mmd_u
         results_dict[split]['all_imba'] = all_imba
 
-        print(""" MMD: {} +/- {} \n DKL: {} +/- {} \n Wass: {} +/- {} \n Class imbalance: {} +/- {} \n 
-              num rewards: {} +/- {} |""".format(np.mean(all_mmd_u),
-                                                 stats.sem(all_mmd_u),
-                                                 np.mean(all_dkl),
-                                                 stats.sem(all_dkl),
-                                                 np.mean(all_wass),
-                                                 stats.sem(all_wass),
-                                                 np.mean(all_imba),
-                                                 stats.sem(all_imba),
-                                                 np.mean(all_num_rewards),
-                                                 stats.sem(all_num_rewards)))
+        print("MMD: {} +/- {} \n DKL: {} +/- {} \n Wass: {} +/- {} \n Class imbalance: {} +/- {} \n num rewards: {} +/- {} |".format(
+            np.mean(all_mmd_u),
+            stats.sem(all_mmd_u),
+            np.mean(all_dkl),
+            stats.sem(all_dkl),
+            np.mean(all_wass),
+            stats.sem(all_wass),
+            np.mean(all_imba),
+            stats.sem(all_imba),
+            np.mean(all_num_rewards),
+            stats.sem(all_num_rewards)))
         print("========")
 
     # Show correlation between greed and number of rewards / MMD unbiased
