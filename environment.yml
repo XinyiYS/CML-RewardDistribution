@@ -1,4 +1,4 @@
-name: CML
+name: CGM
 channels:
   - pytorch
   - gpytorch
@@ -219,4 +219,3 @@ dependencies:
     - werkzeug==1.0.1
     - wrapt==1.12.1
     - yarl==1.6.3
-prefix: /home/sebtsh/anaconda3/envs/CML
