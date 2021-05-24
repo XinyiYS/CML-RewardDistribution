@@ -4,7 +4,7 @@ from core.utils import split_proportions, split_data_into_classes
 
 
 def get_proportions(split, dataset):
-    if dataset == 'gmm' or dataset == 'creditcard':  # WARNING: implicitly assumes 5 parties and 5 classes
+    if dataset == 'creditratings' or dataset == 'creditcard':  # WARNING: implicitly assumes 5 parties and 5 classes
         if split == 'equaldisjoint':
             return np.array([[0.96, 0.01, 0.01, 0.01, 0.01],
                              [0.01, 0.96, 0.01, 0.01, 0.01],
@@ -35,7 +35,7 @@ def get_proportions(split, dataset):
 def get_data_features(dataset, num_classes, d, num_parties, party_data_size, candidate_data_size, split):
     prop = get_proportions(split, dataset)
 
-    if dataset == 'gmm':
+    if dataset == 'creditratings':
         np.random.seed(2)
         means = np.random.uniform(size=(num_classes, d))
         covs = np.zeros((num_classes, d, d))
@@ -63,7 +63,7 @@ def get_data_features(dataset, num_classes, d, num_parties, party_data_size, can
         candidate_datasets = np.array([candidate_dataset] * num_parties)
 
     else:
-        raise Exception("Parameter dataset must be 'gmm', 'creditcard', 'mnist', 'cifar'")
+        raise Exception("Parameter dataset must be 'creditratings', 'creditcard', 'mnist', 'cifar'")
 
     # If party_data_size or candidate_data_size are lower than actual, trim data
     party_datasets = party_datasets[:, :party_data_size, :]

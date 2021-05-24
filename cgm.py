@@ -16,8 +16,8 @@ ex.observers.append(FileStorageObserver('runs'))
 
 
 @ex.named_config
-def gmm():
-    dataset = "gmm"
+def creditratings():
+    dataset = "creditratings"
     split = "equaldisjoint"  # "equaldisjoint" or "unequal"
     greed = 1
     condition = "stable"

@@ -1,6 +1,6 @@
 # Create necessary directories
 cd data || exit
-mkdir -p gmm
+mkdir -p creditratings
 mkdir -p creditcard
 mkdir -p mnist
 mkdir -p cifar

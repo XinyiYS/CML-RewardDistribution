@@ -13,8 +13,8 @@ ex.observers.append(FileStorageObserver('runs'))
 
 
 @ex.named_config
-def gmm():
-    ds = "gmm"
+def creditratings():
+    ds = "creditratings"
     num_classes = 5
     d = 2
     party_data_size = 1000
