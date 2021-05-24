@@ -9,7 +9,7 @@ from metrics.wasserstein import wasserstein_2
 
 def compute_metrics(ds,
                     split,
-                    greed,
+                    inv_temp,
                     num_parties,
                     num_classes,
                     alpha,
@@ -58,4 +58,4 @@ def compute_metrics(ds,
     Path(os.getcwd() + '/data/metrics').mkdir(parents=True, exist_ok=True)
     pickle.dump((party_datasets, party_labels, reference_dataset, candidate_datasets, candidate_labels,
                  rewards, deltas, mus, alpha, lengthscale, class_props, wass_before, wass_after, dkls_before, dkls_after),
-                open("data/metrics/metrics-{}-{}-{}.p".format(ds, split, greed), 'wb'))
+                open("data/metrics/metrics-{}-{}-{}.p".format(ds, split, inv_temp), 'wb'))

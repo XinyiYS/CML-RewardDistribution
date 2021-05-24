@@ -53,7 +53,7 @@ def main(ds, num_classes, d, party_data_size):
     device = 'cuda:0'
     num_parties = 5
     splits = ['equaldisjoint', 'unequal']
-    greeds = [1, 2, 4, 8]
+    inv_temps = [1, 2, 4, 8]
     condition = 'stable'
     keys = ['party_datasets', 'party_labels', 'reference_dataset', 'candidate_datasets', 'candidate_labels',
             'rewards', 'deltas', 'mus', 'alpha', 'lengthscale', 'class_props', 'wass_before', 'wass_after',
@@ -63,38 +63,38 @@ def main(ds, num_classes, d, party_data_size):
     results_dict = {}
     for split in splits:
         results_dict[split] = {}
-        for greed in greeds:
-            results_dict[split][greed] = {}
+        for inv_temp in inv_temps:
+            results_dict[split][inv_temp] = {}
 
     # Load data
     for split in splits:
-        for greed in greeds:
+        for inv_temp in inv_temps:
             tup = pickle.load(open("data/metrics/metrics-{}-{}-{}.p".format(ds,
                                                                             split,
-                                                                            greed), "rb"))
+                                                                            inv_temp), "rb"))
             for i in range(len(keys)):
-                results_dict[split][greed][keys[i]] = tup[i]
+                results_dict[split][inv_temp][keys[i]] = tup[i]
 
     # Cut down rewards at maximum v(S) attained if stopped early
     for split in splits:
-        for greed in greeds:
-            dic = results_dict[split][greed]
+        for inv_temp in inv_temps:
+            dic = results_dict[split][inv_temp]
             for party in range(num_parties):
                 mus = dic['mus'][party]
                 max_mu_idx = np.argmax(mus)
                 if max_mu_idx != len(mus) - 1:
-                    print('{}-{}-{} party {}: max at {}, total length is {}'.format(ds, split, greed, party + 1,
+                    print('{}-{}-{} party {}: max at {}, total length is {}'.format(ds, split, inv_temp, party + 1,
                                                                                     max_mu_idx, len(mus)))
 
     # MMD unbiased
     print("Calculating MMD unbiased")
     for split in splits:
-        for greed in greeds:
-            rewards = results_dict[split][greed]['rewards']
-            reference_dataset = results_dict[split][greed]['reference_dataset']
-            party_datasets = results_dict[split][greed]['party_datasets']
+        for inv_temp in inv_temps:
+            rewards = results_dict[split][inv_temp]['rewards']
+            reference_dataset = results_dict[split][inv_temp]['reference_dataset']
+            party_datasets = results_dict[split][inv_temp]['party_datasets']
             reference_dataset_tens = torch.tensor(reference_dataset, device=device, dtype=torch.float32)
-            ls = results_dict[split][greed]['lengthscale']
+            ls = results_dict[split][inv_temp]['lengthscale']
             k = get_kernel('se', d, ls, device)
             mmd_unbiased_before = [0 for i in range(num_parties)]
             mmd_unbiased_after = [0 for i in range(num_parties)]
@@ -109,23 +109,23 @@ def main(ds, num_classes, d, party_data_size):
                 mmd_unbiased_after[i] = -mmd_neg_unbiased_batched(party_dataset_with_rewards_tens,
                                                                   reference_dataset_tens,
                                                                   k).item()
-            results_dict[split][greed]['mmd_unbiased_before'] = mmd_unbiased_before
-            results_dict[split][greed]['mmd_unbiased_after'] = mmd_unbiased_after
+            results_dict[split][inv_temp]['mmd_unbiased_before'] = mmd_unbiased_before
+            results_dict[split][inv_temp]['mmd_unbiased_after'] = mmd_unbiased_after
     
     # Class imbalance
     print("Calculating class imbalance")
     for split in splits:  # Reduce all party_labels to party_data_size in case its larger
-        for greed in greeds:
-            results_dict[split][greed]['party_labels'] = [labels[:party_data_size] for labels in
-                                                              results_dict[split][greed]['party_labels']]
+        for inv_temp in inv_temps:
+            results_dict[split][inv_temp]['party_labels'] = [labels[:party_data_size] for labels in
+                                                              results_dict[split][inv_temp]['party_labels']]
 
     for split in splits:
-        for greed in greeds:
-            party_datasets = results_dict[split][greed]['party_datasets']
-            party_labels = results_dict[split][greed]['party_labels']
-            rewards = results_dict[split][greed]['rewards']
-            candidate_dataset = results_dict[split][greed]['candidate_datasets'][0]
-            candidate_labels = results_dict[split][greed]['candidate_labels']
+        for inv_temp in inv_temps:
+            party_datasets = results_dict[split][inv_temp]['party_datasets']
+            party_labels = results_dict[split][inv_temp]['party_labels']
+            rewards = results_dict[split][inv_temp]['rewards']
+            candidate_dataset = results_dict[split][inv_temp]['candidate_datasets'][0]
+            candidate_labels = results_dict[split][inv_temp]['candidate_labels']
 
             imba_after = []
             for i in range(num_parties):
@@ -138,22 +138,22 @@ def main(ds, num_classes, d, party_data_size):
                                                                all_dataset,
                                                                all_labels), num_classes)[1])
 
-            results_dict[split][greed]['imba_after'] = imba_after
+            results_dict[split][inv_temp]['imba_after'] = imba_after
 
     # Number of rewards
     for split in splits:
-        for greed in greeds:
-            rewards = results_dict[split][greed]['rewards']
-            results_dict[split][greed]['num_rewards'] = [len(rewards[i]) for i in range(len(rewards))]
+        for inv_temp in inv_temps:
+            rewards = results_dict[split][inv_temp]['rewards']
+            results_dict[split][inv_temp]['num_rewards'] = [len(rewards[i]) for i in range(len(rewards))]
 
     # Show alpha
     print("======= Alpha =======")
     for split in splits:
         print("Split: {}".format(split))
-        print("Alpha: {}".format(results_dict[split][greeds[0]]['alpha']))
+        print("Alpha: {}".format(results_dict[split][inv_temps[0]]['alpha']))
 
-    # Show mean and standard deviation of correlations across greeds
-    print("======= Mean and standard deviation of correlations across greeds =======")
+    # Show mean and standard deviation of correlations across inv_temps
+    print("======= Mean and standard deviation of correlations across inv_temps =======")
     for split in splits:
         print("Split: {}".format(split))
         all_wass = []
@@ -161,13 +161,13 @@ def main(ds, num_classes, d, party_data_size):
         all_num_rewards = []
         all_mmd_u = []
         all_imba = []
-        for greed in greeds:
-            alpha = results_dict[split][greed]['alpha']
-            wass = results_dict[split][greed]['wass_after']
-            dkl = results_dict[split][greed]['dkl_after']
-            num_rewards = results_dict[split][greed]['num_rewards']
-            mmd_u = results_dict[split][greed]['mmd_unbiased_after']
-            imba = results_dict[split][greed]['imba_after']
+        for inv_temp in inv_temps:
+            alpha = results_dict[split][inv_temp]['alpha']
+            wass = results_dict[split][inv_temp]['wass_after']
+            dkl = results_dict[split][inv_temp]['dkl_after']
+            num_rewards = results_dict[split][inv_temp]['num_rewards']
+            mmd_u = results_dict[split][inv_temp]['mmd_unbiased_after']
+            imba = results_dict[split][inv_temp]['imba_after']
 
             all_wass.append(np.corrcoef(alpha, wass)[0, 1])
             all_dkl.append(np.corrcoef(alpha, dkl)[0, 1])
@@ -194,8 +194,8 @@ def main(ds, num_classes, d, party_data_size):
             stats.sem(all_num_rewards)))
         print("========")
 
-    # Show correlation between greed and number of rewards / MMD unbiased
-    print("======= Correlation between greed and number of rewards / MMD unbiased =======")
+    # Show correlation between inv_temp and number of rewards / MMD unbiased
+    print("======= Correlation between inv_temp and number of rewards / MMD unbiased =======")
     for split in splits:
         print("Split: {}".format(split))
         corrs_num_rewards = []
@@ -204,14 +204,14 @@ def main(ds, num_classes, d, party_data_size):
             # print("Party {}".format(i))
             num_rewards_greeds = []
             mmd_unbiased_greeds = []
-            for greed in greeds:
-                num_rewards_greeds.append(results_dict[split][greed]['num_rewards'][i])
-                mmd_unbiased_greeds.append(results_dict[split][greed]['mmd_unbiased_after'][i])
-            corrs_num_rewards.append(np.corrcoef(greeds, num_rewards_greeds)[0, 1])
-            corrs_mmd.append(np.corrcoef(greeds, mmd_unbiased_greeds)[0, 1])
-        print("Correlation between greeds and num_rewards mean and std err: {}, {}".format(np.mean(corrs_num_rewards),
+            for inv_temp in inv_temps:
+                num_rewards_greeds.append(results_dict[split][inv_temp]['num_rewards'][i])
+                mmd_unbiased_greeds.append(results_dict[split][inv_temp]['mmd_unbiased_after'][i])
+            corrs_num_rewards.append(np.corrcoef(inv_temps, num_rewards_greeds)[0, 1])
+            corrs_mmd.append(np.corrcoef(inv_temps, mmd_unbiased_greeds)[0, 1])
+        print("Correlation between inv_temps and num_rewards mean and std err: {}, {}".format(np.mean(corrs_num_rewards),
                                                                                            stats.sem(
                                                                                                corrs_num_rewards)))
-        print("Correlation between greeds and mmd_unbiased mean and std err: {}, {}".format(np.mean(corrs_mmd),
+        print("Correlation between inv_temps and mmd_unbiased mean and std err: {}, {}".format(np.mean(corrs_mmd),
                                                                                             stats.sem(corrs_mmd)))
         print("========")

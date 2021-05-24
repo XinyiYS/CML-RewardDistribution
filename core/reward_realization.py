@@ -81,7 +81,7 @@ def v_update_batch_iter(x, X, Y, S_X, S_XY, k, device, batch_size=2048):
     return current_v, S_X_arr, S_XY_arr
 
 
-def weighted_sampling(candidates, D, mu_target, Y, kernel, greed, rel_tol=1e-03, device='cpu', batch_size=2048):
+def weighted_sampling(candidates, D, mu_target, Y, kernel, inv_temp, device='cpu', batch_size=2048):
     print("Running weighted sampling algorithm with -MMD^2 target {}".format(mu_target))
     m = candidates.shape[0]
     R = []
@@ -104,16 +104,12 @@ def weighted_sampling(candidates, D, mu_target, Y, kernel, greed, rel_tol=1e-03,
         deltas_temp = neg_mmds_new - mu
         weights = deltas_temp
 
-        try:
-            weight_max = np.amax(weights)
-            weight_min = np.amin(weights)
-            weights = (weights - weight_min) / (weight_max - weight_min)  # Scale weights to [0, 1] because
-            # greed factor may not affect sampling for very small/large weight values
-            probs = softmax(greed * weights)
-            idx = np.random.choice(len(G), p=probs)
-        except:
-            print("An exception occurred in the weighted sampling block")
-            break
+        weight_max = np.amax(weights)
+        weight_min = np.amin(weights)
+        weights = (weights - weight_min) / (weight_max - weight_min)  # Scale weights to [0, 1] because
+        # inv_temp factor may not affect sampling for very small/large weight values
+        probs = softmax(inv_temp * weights)
+        idx = np.random.choice(len(G), p=probs)
 
         x = G[idx:idx + 1]
         delta = deltas_temp[idx]
@@ -141,7 +137,7 @@ def weighted_sampling(candidates, D, mu_target, Y, kernel, greed, rel_tol=1e-03,
     return R, deltas, mus
 
 
-def reward_realization(candidates, Y, r, D, kernel, greeds=None, rel_tol=1e-3, device='cpu', batch_size=2048):
+def reward_realization(candidates, Y, r, D, kernel, inv_temps=None, device='cpu', batch_size=2048):
     """
     Reward realization algorithm. Defaults to pure greedy algorithm
     :param candidates: Candidate points from generator distribution, one for each party. array of shape (k, m, d)
@@ -149,13 +145,15 @@ def reward_realization(candidates, Y, r, D, kernel, greeds=None, rel_tol=1e-3, d
     :param r: reward vector. array of shape (k)
     :param D: Parties data. array of shape (k, n, d)
     :param kernel: kernel to measure MMD
-    :param greeds: list of floats in range [0, inf) of size (k). 0 corresponds to pure random sampling, inf
+    :param inv_temps: list of floats in range [0, inf) of size (k). 0 corresponds to pure random sampling, inf
     corresponds to pure greedy. Leave as None to set all to pure greedy. Set individual values to -1 for pure greedy
     for specific parties
+    :param device:
+    :param batch_size:
     """
     k = D.shape[0]
-    if greeds is None:
-        greeds = [-1] * k
+    if inv_temps is None:
+        inv_temps = [1] * k
 
     rewards = []
     deltas = []
@@ -167,8 +165,7 @@ def reward_realization(candidates, Y, r, D, kernel, greeds=None, rel_tol=1e-3, d
                                               mu_target=r[i],
                                               Y=Y,
                                               kernel=kernel,
-                                              greed=greeds[i],
-                                              rel_tol=rel_tol,
+                                              inv_temp=inv_temps[i],
                                               device=device,
                                               batch_size=batch_size)
         rewards.append(reward)

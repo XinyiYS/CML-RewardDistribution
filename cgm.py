@@ -19,7 +19,7 @@ ex.observers.append(FileStorageObserver('runs'))
 def creditratings():
     dataset = "creditratings"
     split = "equaldisjoint"  # "equaldisjoint" or "unequal"
-    greed = 1
+    inv_temp = 1
     condition = "stable"
     num_parties = 5
     num_classes = 5
@@ -36,7 +36,7 @@ def creditratings():
 def creditcard():
     dataset = "creditcard"
     split = "equaldisjoint"  # "equaldisjoint" or "unequal"
-    greed = 1
+    inv_temp = 1
     condition = "stable"
     num_parties = 5
     num_classes = 5
@@ -53,7 +53,7 @@ def creditcard():
 def mnist():
     dataset = "mnist"
     split = "equaldisjoint"  # "equaldisjoint" or "unequal"
-    greed = 1
+    inv_temp = 1
     condition = "stable"
     num_parties = 5
     num_classes = 10
@@ -70,7 +70,7 @@ def mnist():
 def cifar():
     dataset = "cifar"
     split = "equaldisjoint"  # "equaldisjoint" or "unequal"
-    greed = 1
+    inv_temp = 1
     condition = "stable"
     num_parties = 5
     num_classes = 10
@@ -84,7 +84,7 @@ def cifar():
 
 
 @ex.automain
-def main(dataset, split, greed, condition, num_parties, num_classes, d, party_data_size,
+def main(dataset, split, inv_temp, condition, num_parties, num_classes, d, party_data_size,
          candidate_data_size, kernel, gpu, batch_size, optimize_kernel_params):
     args = dict(sorted(locals().items()))
     print("Running with parameters {}".format(args))
@@ -133,30 +133,29 @@ def main(dataset, split, greed, condition, num_parties, num_classes, d, party_da
     print("Reward values: \n{}".format(r))
 
     # Reward realization
-    greeds = np.ones(num_parties) * greed
+    inv_temps = np.ones(num_parties) * inv_temp
     rewards, deltas, mus = reward_realization(candidate_datasets,
                                               reference_dataset,
                                               r,
                                               party_datasets,
                                               kernel,
-                                              greeds=greeds,
-                                              rel_tol=1e-10,
+                                              inv_temps=inv_temps,
                                               device=device,
                                               batch_size=batch_size)
 
     # Save results
     pickle.dump((party_datasets, party_labels, reference_dataset, candidate_datasets, candidate_labels, rewards, deltas, mus),
-                open("runs/{}/CGM-{}-{}-greed{}-{}.p".format(run_id,
+                open("runs/{}/CGM-{}-{}-inv_temp{}-{}.p".format(run_id,
                                                              dataset,
                                                              split,
-                                                             greed,
+                                                             inv_temp,
                                                              condition), "wb"))
     print("Results saved successfully")
 
     # Metrics
     compute_metrics(dataset,
                     split,
-                    greed,
+                    inv_temp,
                     num_parties,
                     num_classes,
                     alpha,
