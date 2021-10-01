@@ -35,6 +35,10 @@ python cgm.py with creditcard split=equaldisjoint inv_temp=1
 ```
 python metrics.py wih ${dataset}
 ```
+4. To replicate the downstream supervised learning experiments in the paper for any dataset and split, run the following Python script to compute and display the metrics after all experiments with `inv_temp = {1, 2, 4, 8}` have completed.
+```
+python supervised.py wih ${dataset}
+```
 
 ## License
 This code is released under the MIT License.
