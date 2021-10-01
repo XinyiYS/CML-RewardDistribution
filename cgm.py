@@ -1,5 +1,7 @@
 import numpy as np
 import pickle
+import os
+from pathlib import Path
 from sacred import Experiment
 from sacred.observers import FileStorageObserver
 
@@ -9,7 +11,6 @@ from core.reward_calculation import get_v, shapley, get_vN, get_v_is, opt_vstar,
 from core.reward_realization import reward_realization
 from core.utils import norm
 from metrics.compute import compute_metrics
-
 
 ex = Experiment("CGM")
 ex.observers.append(FileStorageObserver('runs'))
@@ -93,15 +94,21 @@ def main(dataset, split, inv_temp, condition, num_parties, num_classes, d, party
         device = 'cuda:0'  # single GPU
     else:
         device = 'cpu'
+    result_dir = "data/{}/cgm-results/".format(dataset)
+    Path(result_dir).mkdir(parents=True, exist_ok=True)
+    file_name = "CGM-{}-{}-invtemp{}-{}.p".format(dataset,
+                                                  split,
+                                                  inv_temp,
+                                                  condition)
 
     # Setup data and kernel
     party_datasets, party_labels, reference_dataset, candidate_datasets, candidate_labels = get_data_features(dataset,
-                                                                                            num_classes,
-                                                                                            d,
-                                                                                            num_parties,
-                                                                                            party_data_size,
-                                                                                            candidate_data_size,
-                                                                                            split)
+                                                                                                              num_classes,
+                                                                                                              d,
+                                                                                                              num_parties,
+                                                                                                              party_data_size,
+                                                                                                              candidate_data_size,
+                                                                                                              split)
 
     kernel = get_kernel(kernel, d, 1., device)
     if optimize_kernel_params:
@@ -144,12 +151,10 @@ def main(dataset, split, inv_temp, condition, num_parties, num_classes, d, party
                                               batch_size=batch_size)
 
     # Save results
-    pickle.dump((party_datasets, party_labels, reference_dataset, candidate_datasets, candidate_labels, rewards, deltas, mus),
-                open("runs/{}/CGM-{}-{}-inv_temp{}-{}.p".format(run_id,
-                                                             dataset,
-                                                             split,
-                                                             inv_temp,
-                                                             condition), "wb"))
+    pickle.dump(
+        (party_datasets, party_labels, reference_dataset, candidate_datasets, candidate_labels, rewards, deltas, mus,
+         alpha),
+        open(result_dir + file_name, "wb"))
     print("Results saved successfully")
 
     # Metrics
