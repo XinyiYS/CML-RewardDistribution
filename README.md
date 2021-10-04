@@ -23,7 +23,7 @@ In the main `CGM` directory,
 ```shell
 conda activate CGM
 ```
-2. Run the desired experiment. Valid value for `dataset` are `{creditratings, creditcard, mnist, cifar}`, valid values for `split` are `{equaldisjoint, unequal}`, and valid values for `inv_temp` are any non-negative real number.
+2. Run the desired experiment. Valid values for `dataset` are `{creditratings, creditcard, mnist, cifar}`, valid values for `split` are `{equaldisjoint, unequal}`, and valid values for `inv_temp` are any non-negative real number.
 ```shell
 python cgm.py with ${dataset} split=${split} inv_temp=${inv_temp}
 ```
