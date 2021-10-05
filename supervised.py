@@ -3,6 +3,7 @@ import pickle
 
 from sacred import Experiment
 from sacred.observers import FileStorageObserver
+from scipy import stats
 from sklearn.svm import SVC
 
 ex = Experiment("supervised")
@@ -135,7 +136,11 @@ def main(ds, num_classes, party_data_size, condition, num_parties, d):
             print("Correlation with alpha after rewards: {}".format(corr_with_reward))
             corrs_before.append(corr_before)
             corrs_with_reward.append(corr_with_reward)
-        print("Average correlation with alpha before rewards for {} split: {}".format(split,
-                                                                                      np.mean(corrs_before)))
-        print("Average correlation with alpha after rewards for {} split: {}".format(split,
-                                                                                     np.mean(corrs_with_reward)))
+        print("Average correlation with alpha before rewards for {} split: {}, stderr: {}".format(split,
+                                                                                                  np.mean(corrs_before),
+                                                                                                  stats.sem(corrs_before)
+                                                                                                  ))
+        print("Average correlation with alpha after rewards for {} split: {}, stderr: {}".format(split,
+                                                                                                 np.mean(corrs_with_reward),
+                                                                                                 stats.sem(corrs_with_reward)
+                                                                                                 ))
