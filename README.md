@@ -1,5 +1,5 @@
 # Collaborative Generative Modelling
-The code for the paper "Incentivizing Collaboration in Machine Learning via Synthetic Data Rewards".
+The code for our AAAI'22 paper ["Incentivizing Collaboration in Machine Learning via Synthetic Data Rewards"](https://aaai-2022.virtualchair.net/poster_aaai12953) which received an oral presentation (__4.26%__ acceptance rate).
 
 ## Requirements
 1. Linux machine (experiments were run on Ubuntu 18.04.5 LTS and Ubuntu 20.04.2 LTS)
@@ -42,3 +42,15 @@ python supervised.py wih ${dataset}
 
 ## License
 This code is released under the MIT License.
+
+## Citing our paper
+If you find our paper relevant or use our code in your research, please consider citing our paper:
+```
+@InProceedings{tay2021,
+  title={Incentivizing collaboration in machine learning via synthetic data rewards},
+  author={Sebastian Shenghong Tay, Xinyi Xu, Chuan Sheng Foo, Bryan Kian Hsiang Low},
+  booktitle={Proc. AAAI},
+  year={2022}
+}
+```
+
