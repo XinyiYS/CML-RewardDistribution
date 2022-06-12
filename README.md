@@ -1,4 +1,4 @@
-# Collaborative Generative Modelling
+# Incentivizing Collaboration in Machine Learning via Synthetic Data Rewards [AAAI-2022].
 The code for our AAAI'22 paper ["Incentivizing Collaboration in Machine Learning via Synthetic Data Rewards"](https://aaai-2022.virtualchair.net/poster_aaai12953) which received an oral presentation (__4.26%__ acceptance rate).
 
 ## Requirements
